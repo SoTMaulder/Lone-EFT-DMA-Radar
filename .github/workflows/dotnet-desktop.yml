@@ -68,7 +68,7 @@ jobs:
       - name: Pack with Velopack
         run: |
           vpk pack `
-            --packId github.lonedma.eft `
+            --packId github.sotmaulder.eft `
             --packVersion "${{ steps.nbgv.outputs.SemVer2 }}" `
             --packDir "out" `
             --mainExe "Lone-EFT-DMA-Radar.exe" `
