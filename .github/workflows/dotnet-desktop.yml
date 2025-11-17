@@ -19,7 +19,7 @@ concurrency:
 jobs:
   build:
     name: Build & Deploy
-    if: github.repository_owner == 'lone-dma' ## If you remove this change the Velopack packId from 'github.lonedma.eft' below.
+    if: github.repository_owner == 'sotmaulder' ## If you remove this change the Velopack packId from 'github.sotmaulder.eft' below.
     runs-on: windows-latest
     environment: production
 
