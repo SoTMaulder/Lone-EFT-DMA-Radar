@@ -6,8 +6,17 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld
 {
     public static class GameWorldExtensions
     {
-        public static ulong GetGameWorld(this GameObjectManager gom, out string map)
+        /// <summary>
+        /// Get the GameWorld instance from the GameObjectManager.
+        /// </summary>
+        /// <param name="gom"></param>
+        /// <param name="ct">Restart radar cancellation token.</param>
+        /// <param name="map">Map for the located gameworld, otherwise null.</param>
+        /// <returns></returns>
+        /// <exception cref="InvalidOperationException"></exception>
+        public static ulong GetGameWorld(this GameObjectManager gom, CancellationToken ct, out string map)
         {
+            ct.ThrowIfCancellationRequested();
             Debug.WriteLine("Searching for GameWorld...");
             var firstObject = Memory.ReadValue<LinkedListObject>(gom.ActiveNodes);
             var lastObject = Memory.ReadValue<LinkedListObject>(gom.LastActiveNode);
@@ -20,12 +29,13 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld
             Task<GameWorldResult> winner = null;
             var tasks = new List<Task<GameWorldResult>>()
             {
-                Task.Run(() => ReadForward(firstObject, lastObject, cts.Token)),
-                Task.Run(() => ReadBackward(lastObject, firstObject, cts.Token))
+                Task.Run(() => ReadForward(firstObject, lastObject, cts.Token, ct)),
+                Task.Run(() => ReadBackward(lastObject, firstObject, cts.Token, ct))
             };
             while (tasks.Count > 0)
             {
                 var finished = Task.WhenAny(tasks).GetAwaiter().GetResult();
+                ct.ThrowIfCancellationRequested();
                 tasks.Remove(finished);
 
                 if (finished.Status == TaskStatus.RanToCompletion)
@@ -41,11 +51,12 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld
             return winner.Result.GameWorld;
         }
 
-        private static GameWorldResult ReadForward(LinkedListObject currentObject, LinkedListObject lastObject, CancellationToken ct)
+        private static GameWorldResult ReadForward(LinkedListObject currentObject, LinkedListObject lastObject, CancellationToken ct1, CancellationToken ct2)
         {
             while (currentObject.ThisObject != lastObject.ThisObject)
             {
-                ct.ThrowIfCancellationRequested();
+                ct1.ThrowIfCancellationRequested();
+                ct2.ThrowIfCancellationRequested();
                 if (ParseGameWorld(ref currentObject) is GameWorldResult result)
                 {
                     Debug.WriteLine("GameWorld Found! (Forward)");
@@ -57,11 +68,12 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld
             throw new InvalidOperationException("GameWorld not found.");
         }
 
-        private static GameWorldResult ReadBackward(LinkedListObject currentObject, LinkedListObject lastObject, CancellationToken ct)
+        private static GameWorldResult ReadBackward(LinkedListObject currentObject, LinkedListObject lastObject, CancellationToken ct1, CancellationToken ct2)
         {
             while (currentObject.ThisObject != lastObject.ThisObject)
             {
-                ct.ThrowIfCancellationRequested();
+                ct1.ThrowIfCancellationRequested();
+                ct2.ThrowIfCancellationRequested();
                 if (ParseGameWorld(ref currentObject) is GameWorldResult result)
                 {
                     Debug.WriteLine("GameWorld Found! (Backward)");

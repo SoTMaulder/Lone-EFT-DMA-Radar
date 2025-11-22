@@ -69,10 +69,8 @@ namespace LoneEftDmaRadar.UI.Radar.ViewModels
         #region General Settings
 
         public ICommand RestartRadarCommand { get; }
-        private void OnRestartRadar()
-        {
-            Memory.RestartRadar = true;
-        }
+        private void OnRestartRadar() =>
+            Memory.RestartRadar();
 
         private bool _hotkeyManagerIsEnabled = true;
         public bool HotkeyManagerIsEnabled
@@ -244,7 +242,7 @@ namespace LoneEftDmaRadar.UI.Radar.ViewModels
             SKPaints.PaintContainerLoot.StrokeWidth = 3 * newScale;
             SKPaints.PaintTransparentBacker.StrokeWidth = 1 * newScale;
             SKPaints.PaintExplosives.StrokeWidth = 3 * newScale;
-            SKPaints.PaintExfilOpen.StrokeWidth = 1 * newScale;
+            SKPaints.PaintExfil.StrokeWidth = 1 * newScale;
             SKPaints.PaintExfilTransit.StrokeWidth = 1 * newScale;
             // Fonts
             SKFonts.UIRegular.Size = 12f * newScale;

@@ -4,22 +4,22 @@ namespace SDK
     {
         public readonly partial struct GameWorld
         {
-            public const uint Location = 0xA8; // String
+            public const uint Location = 0xB8; // String
         }
 
         public readonly partial struct ClientLocalGameWorld
         {
-            public const uint BtrController = 0x50; // -.\uF07E
-            public const uint LootList = 0x140; // System.Collections.Generic.List<\uE311>
-            public const uint RegisteredPlayers = 0x168; // System.Collections.Generic.List<IPlayer>
-            public const uint MainPlayer = 0x1D0; // EFT.Player
-            public const uint SynchronizableObjectLogicProcessor = 0x208; // -.\uEBD9
-            public const uint Grenades = 0x230; // -.\uE3D7<Int32, Throwable>
+            public const uint BtrController = 0x20; // -.\uF07E
+            public const uint LootList = 0x178; // System.Collections.Generic.List<\uE311>
+            public const uint RegisteredPlayers = 0x190; // System.Collections.Generic.List<IPlayer>
+            public const uint MainPlayer = 0x1E0; // EFT.Player
+            public const uint SynchronizableObjectLogicProcessor = 0x218; // -.\uEBD9
+            public const uint Grenades = 0x258; // -.\uE3D7<Int32, Throwable>
         }
 
         public readonly partial struct SynchronizableObject
         {
-            public const uint Type = 0x70; // System.Int32
+            public const uint Type = 0x68; // System.Int32
         }
 
         public readonly partial struct SynchronizableObjectLogicProcessor
@@ -57,28 +57,28 @@ namespace SDK
         public readonly partial struct Player
         {
             public const uint MovementContext = 0x60; // EFT.MovementContext
-            public const uint _playerBody = 0x158; // EFT.PlayerBody
-            public const uint Corpse = 0x3E0; // EFT.Interactive.Corpse
-            public const uint Location = 0x5E0; // String
-            public const uint Profile = 0x8C0; // EFT.Profile
+            public const uint _playerBody = 0x190; // EFT.PlayerBody
+            public const uint Corpse = 0x640; // EFT.Interactive.Corpse
+            public const uint Location = 0x860; // String
+            public const uint Profile = 0x8D8; // EFT.Profile
         }
 
         public readonly partial struct ObservedPlayerView
         {
-            public const uint GroupID = 0x30; // String
-            public const uint AccountId = 0x78; // String
-            public const uint PlayerBody = 0x88; // EFT.PlayerBody
-            public const uint ObservedPlayerController = 0xB0; // -.\uED46
-            public const uint Voice = 0xC8; // String
-            public const uint Side = 0x20; // System.Int32
-            public const uint IsAI = 0x58; // Boolean
+            public const uint GroupID = 0x78; // String
+            public const uint AccountId = 0xB0; // String
+            public const uint PlayerBody = 0xC8; // EFT.PlayerBody
+            public const uint ObservedPlayerController = 0x20; // -.\uED46
+            public const uint Voice = 0x38; // String
+            public const uint Side = 0x8C; // System.Int32
+            public const uint IsAI = 0x98; // Boolean
         }
 
         public readonly partial struct ObservedPlayerController
         {
             public const uint Player = 0x18; // EFT.NextObservedPlayer.ObservedPlayerView
-            public const uint MovementController = 0xD0; // -.\uED4F
-            public const uint HealthController = 0xF8; // -.\uE446
+            public const uint MovementController = 0xD8; // -.\uED4F
+            public const uint HealthController = 0xE8; // -.\uE446
         }
 
         public readonly partial struct ObservedMovementController
@@ -107,7 +107,6 @@ namespace SDK
 
         public readonly partial struct PlayerInfo
         {
-            public const uint EntryPoint = 0x28; // String
             public const uint GroupId = 0x50; // String
             public const uint Side = 0x48; // [HUMAN] Int32
             public const uint RegistrationDate = 0x4C; // Int32
@@ -115,7 +114,7 @@ namespace SDK
 
         public readonly partial struct MovementContext
         {
-            public const uint Player = 0x18; // EFT.Player
+            public const uint Player = 0x48; // EFT.Player
             public const uint _rotation = 0xC4; // UnityEngine.Vector2
         }
 
@@ -186,7 +185,10 @@ namespace SDK
             Birdeye = 16384,
             Knight = 32768,
             BigPipe = 65536,
+            BlackDivision = 131072,
+            VSRF = 262144
         }
+
 
         [Flags]
         public enum EMemberCategory
@@ -205,85 +207,6 @@ namespace SDK
             Unheard = 1024,
         }
 
-        public enum WildSpawnType
-        {
-            marksman = 0,
-            assault = 1,
-            bossTest = 2,
-            bossBully = 3,
-            followerTest = 4,
-            followerBully = 5,
-            bossKilla = 6,
-            bossKojaniy = 7,
-            followerKojaniy = 8,
-            pmcBot = 9,
-            cursedAssault = 10,
-            bossGluhar = 11,
-            followerGluharAssault = 12,
-            followerGluharSecurity = 13,
-            followerGluharScout = 14,
-            followerGluharSnipe = 15,
-            followerSanitar = 16,
-            bossSanitar = 17,
-            test = 18,
-            assaultGroup = 19,
-            sectantWarrior = 20,
-            sectantPriest = 21,
-            bossTagilla = 22,
-            followerTagilla = 23,
-            exUsec = 24,
-            gifter = 25,
-            bossKnight = 26,
-            followerBigPipe = 27,
-            followerBirdEye = 28,
-            bossZryachiy = 29,
-            followerZryachiy = 30,
-            bossBoar = 32,
-            followerBoar = 33,
-            arenaFighter = 34,
-            arenaFighterEvent = 35,
-            bossBoarSniper = 36,
-            crazyAssaultEvent = 37,
-            peacefullZryachiyEvent = 38,
-            sectactPriestEvent = 39,
-            ravangeZryachiyEvent = 40,
-            followerBoarClose1 = 41,
-            followerBoarClose2 = 42,
-            bossKolontay = 43,
-            followerKolontayAssault = 44,
-            followerKolontaySecurity = 45,
-            shooterBTR = 46,
-            bossPartisan = 47,
-            spiritWinter = 48,
-            spiritSpring = 49,
-            peacemaker = 50,
-            pmcBEAR = 51,
-            pmcUSEC = 52,
-            skier = 53,
-            sectantPredvestnik = 57,
-            sectantPrizrak = 58,
-            sectantOni = 59,
-            infectedAssault = 60,
-            infectedPmc = 61,
-            infectedCivil = 62,
-            infectedLaborant = 63,
-            infectedTagilla = 64,
-            bossTagillaAgro = 65,
-            bossKillaAgro = 66,
-            tagillaHelperAgro = 67,
-        }
-
-        public enum EExfiltrationStatus
-        {
-            NotPresent = 1,
-            UncompleteRequirements = 2,
-            Countdown = 3,
-            RegularMode = 4,
-            Pending = 5,
-            AwaitsManualActivation = 6,
-            Hidden = 7,
-        }
-
         public enum SynchronizableObjectType
         {
             AirDrop = 0,
@@ -299,20 +222,6 @@ namespace SDK
             Exploding = 3,
             Exploded = 4,
             Inert = 5,
-        }
-
-        public enum EQuestStatus
-        {
-            Locked = 0,
-            AvailableForStart = 1,
-            Started = 2,
-            AvailableForFinish = 3,
-            Success = 4,
-            Fail = 5,
-            FailRestartable = 6,
-            MarkedAsFailed = 7,
-            Expired = 8,
-            AvailableAfter = 9,
         }
     }
 }
