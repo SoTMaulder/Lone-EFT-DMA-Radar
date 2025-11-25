@@ -89,12 +89,12 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player.Helpers
                     }
                     else
                     {
-                        _items[slot.Key] = null;
+                        _items.TryRemove(slot.Key, out _);
                     }
                 }
                 catch
                 {
-                    _items[slot.Key] = null;
+                    _items.TryRemove(slot.Key, out _);
                 }
             }
         }
