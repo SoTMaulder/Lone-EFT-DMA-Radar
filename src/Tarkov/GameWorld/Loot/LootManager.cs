@@ -32,7 +32,7 @@ using LoneEftDmaRadar.Tarkov.Unity.Collections;
 using LoneEftDmaRadar.Tarkov.Unity.Structures;
 using LoneEftDmaRadar.UI.Loot;
 
-namespace LoneEftDmaRadar.Tarkov.GameWorld.Loot.Helpers
+namespace LoneEftDmaRadar.Tarkov.GameWorld.Loot
 {
     public sealed class LootManager
     {
@@ -46,11 +46,10 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Loot.Helpers
         /// All loot (with filter applied).
         /// </summary>
         public IReadOnlyList<LootItem> FilteredLoot { get; private set; }
-
         /// <summary>
-        /// All unfiltered loot.
+        /// All Static Containers on the map.
         /// </summary>
-        public IEnumerable<LootItem> AllLoot => _loot.Values;
+        public IEnumerable<StaticLootContainer> StaticContainers => _loot.Values.OfType<StaticLootContainer>();
 
         public LootManager(ulong localGameWorld)
         {
@@ -73,10 +72,9 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Loot.Helpers
                 {
                     var filter = LootFilter.Create();
                     FilteredLoot = _loot.Values?
-                        .OfType<LootItem>()
                         .Where(x => filter(x))
-                        .OrderByDescending(x => x.Important)
-                        .ThenByDescending(x => x?.Price ?? 0)
+                        .OrderBy(x => x.Important)
+                        .ThenBy(x => x?.Price ?? 0)
                         .ToList();
                 }
                 catch { }
