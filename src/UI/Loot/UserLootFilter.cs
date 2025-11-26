@@ -34,6 +34,8 @@ namespace LoneEftDmaRadar.UI.Loot
     {
         [JsonPropertyName("enabled")] public bool Enabled { get; set; } = true;
 
+        [JsonPropertyName("color")] public string Color { get; set; } = SKColors.Turquoise.ToString();
+
         [JsonInclude]
         [JsonPropertyName("entries")]
         public ObservableCollection<LootFilterEntry> Entries { get; init; } = new();
