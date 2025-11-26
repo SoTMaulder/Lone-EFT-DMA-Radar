@@ -264,11 +264,18 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Loot.Helpers
                     var itemTemplate = Memory.ReadPtr(item + Offsets.LootItem.Template); //EFT.InventoryLogic.ItemTemplate
                     var isQuestItem = Memory.ReadValue<bool>(itemTemplate + Offsets.ItemTemplate.QuestItem);
 
-                    if (!isQuestItem)
+                    var mongoId = Memory.ReadValue<MongoID>(itemTemplate + Offsets.ItemTemplate._id);
+                    var id = mongoId.ReadString();
+                    if (isQuestItem)
+                    {
+                        var shortNamePtr = Memory.ReadPtr(itemTemplate + Offsets.ItemTemplate.ShortName);
+                        var shortName = Memory.ReadUnicodeString(shortNamePtr, 128);
+                        Debug.WriteLine(shortName);
+                        _ = _loot.TryAdd(p.ItemBase, new LootItem(id, $"Q_{shortName}", pos));
+                    }
+                    else
                     {
                         //If NOT a quest item. Quest items are like the quest related things you need to find like the pocket watch or Jaeger's Letter etc. We want to ignore these quest items.
-                        var mongoId = Memory.ReadValue<MongoID>(itemTemplate + Offsets.ItemTemplate._id);
-                        var id = mongoId.ReadString();
                         if (TarkovDataManager.AllItems.TryGetValue(id, out var entry))
                         {
                             _ = _loot.TryAdd(p.ItemBase, new LootItem(entry, pos));
