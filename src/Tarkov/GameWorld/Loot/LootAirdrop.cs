@@ -43,6 +43,8 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Loot
         {
         }
 
+        public override string GetUILabel() => this.Name;
+
         public override void Draw(SKCanvas canvas, EftMapParams mapParams, LocalPlayer localPlayer)
         {
             var heightDiff = Position.Y - localPlayer.Position.Y;
@@ -86,6 +88,8 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Loot
 
         public override void DrawMouseover(SKCanvas canvas, EftMapParams mapParams, LocalPlayer localPlayer)
         {
+            if (!App.Config.Loot.Enabled)
+                return;
             Position.ToMapPos(mapParams.Map).ToZoomedPos(mapParams).DrawMouseoverText(canvas, Name);
         }
     }
