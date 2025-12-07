@@ -134,13 +134,15 @@ namespace LoneEftDmaRadar.UI.ColorPicker
                 [ColorPickerOption.DeathMarker] = SKColors.Black.ToString(),
                 [ColorPickerOption.RegularLoot] = SKColors.WhiteSmoke.ToString(),
                 [ColorPickerOption.ValuableLoot] = SKColors.Turquoise.ToString(),
+                [ColorPickerOption.WishlistLoot] = SKColors.Lime.ToString(),
                 [ColorPickerOption.ContainerLoot] = SKColor.Parse("FFFFCC").ToString(),
-                [ColorPickerOption.QuestItemsFilterLoot] = SKColors.YellowGreen.ToString(),
+                [ColorPickerOption.QuestHelperItems] = SKColors.YellowGreen.ToString(),
                 [ColorPickerOption.Corpse] = SKColors.Silver.ToString(),
                 [ColorPickerOption.MedsFilterLoot] = SKColors.LightSalmon.ToString(),
                 [ColorPickerOption.FoodFilterLoot] = SKColors.CornflowerBlue.ToString(),
                 [ColorPickerOption.BackpacksFilterLoot] = SKColor.Parse("00b02c").ToString(),
                 [ColorPickerOption.Explosives] = SKColors.OrangeRed.ToString(),
+                [ColorPickerOption.QuestHelperZones] = SKColors.DeepPink.ToString()
             };
         }
 
@@ -223,9 +225,9 @@ namespace LoneEftDmaRadar.UI.ColorPicker
                             SKPaints.PaintImportantLoot.Color = skColor;
                             SKPaints.TextImportantLoot.Color = skColor;
                             break;
-                        case ColorPickerOption.QuestItemsFilterLoot:
-                            SKPaints.PaintQuestItem.Color = skColor;
-                            SKPaints.TextQuestItem.Color = skColor;
+                        case ColorPickerOption.WishlistLoot:
+                            SKPaints.PaintWishlistItem.Color = skColor;
+                            SKPaints.TextWishlistItem.Color = skColor;
                             break;
                         case ColorPickerOption.Corpse:
                             SKPaints.PaintCorpse.Color = skColor;
@@ -248,6 +250,13 @@ namespace LoneEftDmaRadar.UI.ColorPicker
                             break;
                         case ColorPickerOption.ContainerLoot:
                             SKPaints.PaintContainerLoot.Color = skColor;
+                            break;
+                        case ColorPickerOption.QuestHelperZones:
+                            SKPaints.PaintQuestZone.Color = skColor;
+                            break;
+                        case ColorPickerOption.QuestHelperItems:
+                            SKPaints.PaintQuestItem.Color = skColor;
+                            SKPaints.TextQuestItem.Color = skColor;
                             break;
                     }
                 }

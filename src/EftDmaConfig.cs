@@ -129,6 +129,13 @@ namespace LoneEftDmaRadar
         public InfoWidgetConfig InfoWidget { get; private set; } = new();
 
         /// <summary>
+        /// Quest Helper Cfg
+        /// </summary>
+        [JsonPropertyName("questHelper")]
+        [JsonInclude]
+        public QuestHelperConfig QuestHelper { get; private set; } = new();
+
+        /// <summary>
         /// Player Watchlist Collection.
         /// ** ONLY USE FOR BINDING **
         /// </summary>
@@ -539,6 +546,12 @@ namespace LoneEftDmaRadar
         /// </summary>
         [JsonPropertyName("markSusPlayers")]
         public bool MarkSusPlayers { get; set; } = false;
+
+        /// <summary>
+        /// Show exfils on radar.
+        /// </summary>
+        [JsonPropertyName("showExfils")]
+        public bool ShowExfils { get; set; } = true;
     }
 
     public sealed class LootConfig
@@ -583,7 +596,7 @@ namespace LoneEftDmaRadar
         /// Show loot on the player's wishlist (manual only).
         /// </summary>
         [JsonPropertyName("showWishlist")]
-        public bool ShowWishlist { get; set; }
+        public bool ShowWishlist { get; set; } = false;
 
     }
 
@@ -762,5 +775,22 @@ namespace LoneEftDmaRadar
         /// </summary>
         [JsonPropertyName("tickRate")]
         public string TickRate { get; set; } = "60";
+    }
+
+    public sealed class QuestHelperConfig
+    {
+        /// <summary>
+        /// Enables Quest Helper
+        /// </summary>
+        [JsonPropertyName("enabled")]
+        public bool Enabled { get; set; } = true;
+
+        /// <summary>
+        /// Quests that are overridden/disabled.
+        /// </summary>
+        [JsonPropertyName("blacklistedQuests")]
+        [JsonInclude]
+        [JsonConverter(typeof(CaseInsensitiveConcurrentDictionaryConverter<byte>))]
+        public ConcurrentDictionary<string, byte> BlacklistedQuests { get; private set; } = new(StringComparer.OrdinalIgnoreCase);
     }
 }

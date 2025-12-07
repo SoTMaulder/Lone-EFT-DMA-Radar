@@ -187,7 +187,11 @@ Toggle Fullscreen: F11
                         <CheckBox Content="Mark Sus Players"
                                   ToolTip="Marks players as suspicious based on certain criteria (K/D, S/R, etc.)"
                                   IsChecked="{Binding MarkSusPlayers, Mode=TwoWay}"
-                                  Margin="0,0,0,8" />
+                                  Margin="0,0,16,8" />
+                        <CheckBox Content="Show Exfils"
+                              ToolTip="Toggle rendering Exfils/Transits on map."
+                              IsChecked="{Binding ShowExfils, Mode=TwoWay}"
+                              Margin="0,0,0,8" />
                     </WrapPanel>
 
                 </StackPanel>
@@ -201,6 +205,10 @@ Toggle Fullscreen: F11
                         <CheckBox Content="Show Loot (F3)"
                                   ToolTip="Toggles displaying Loot on the Radar/ESP."
                                   IsChecked="{Binding ShowLoot, Mode=TwoWay}"
+                                  Margin="0,0,16,8" />
+                        <CheckBox Content="Show Loot Wishlist"
+                                  ToolTip="Tracks loot on your account's Loot Wishlist (Manual Adds Only, does not work for Automatically Added Items)."
+                                  IsChecked="{Binding LootWishlist, Mode=TwoWay}"
                                   Margin="0,0,16,8" />
                         <CheckBox Content="Show Static Containers"
                                   ToolTip="Shows static containers on the map. Due to recent Tarkov Anti‑Cheat Measures, you cannot see what the contents are however."
@@ -245,6 +253,45 @@ Toggle Fullscreen: F11
                     </GroupBox>
 
                 </StackPanel>
+            </GroupBox>
+
+            <!-- Quest Helper -->
+            <GroupBox Header="Quest Helper"
+                      Margin="0,0,0,12">
+                <DockPanel LastChildFill="True"
+                           Margin="0,4,0,0">
+                    <CheckBox Content="Enabled"
+                              ToolTip="Toggles the Quest Helper feature. This will display Items and Zones that you need to pickup/visit for quests that you currently have active."
+                              IsChecked="{Binding QuestHelperEnabled, Mode=TwoWay}"
+                              DockPanel.Dock="Left"
+                              Margin="0,0,8,0" />
+                    <TextBlock Text="Tracked Quests"
+                               VerticalAlignment="Center"
+                               Margin="0,0,4,8" />
+                    <ListBox ItemsSource="{Binding CurrentQuests}"
+                             IsEnabled="{Binding QuestHelperEnabled}"
+                             Height="250"
+                             ToolTip="Active Quest List (populates once you are in raid). Uncheck a quest to untrack it."
+                             ScrollViewer.CanContentScroll="True">
+
+                        <!-- 1) Define the panel *with* virtualization baked in -->
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <VirtualizingStackPanel VirtualizingStackPanel.IsVirtualizing="True"
+                                                        VirtualizingStackPanel.VirtualizationMode="Recycling"
+                                                        IsItemsHost="True" />
+                            </ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
+
+                        <!-- 2) Your existing template -->
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <CheckBox Content="{Binding Name}"
+                                          IsChecked="{Binding IsEnabled, Mode=TwoWay}" />
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
             </GroupBox>
 
         </StackPanel>

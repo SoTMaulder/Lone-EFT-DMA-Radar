@@ -53,11 +53,13 @@ namespace LoneEftDmaRadar.UI.Loot
             {
                 Predicate<LootItem> p = item => // Default Predicate
                 {
+                    if (App.Config.QuestHelper.Enabled && item.IsQuestHelperItem)
+                        return true;
                     if (item is LootAirdrop)
                         return true;
                     if (!App.Config.Loot.HideCorpses && item is LootCorpse)
                         return true;
-                    return (item.IsRegularLoot || item.IsValuableLoot || item.IsImportant) ||
+                    return (item.IsRegularLoot || item.IsValuableLoot || item.IsImportant || item.IsWishlisted) ||
                                 (ShowBackpacks && item.IsBackpack) ||
                                 (ShowMeds && item.IsMeds) ||
                                 (ShowFood && item.IsFood) ||
@@ -71,15 +73,15 @@ namespace LoneEftDmaRadar.UI.Loot
             else // FilteredLoot Search
             {
                 var names = search!.Split(',').Select(a => a.Trim()).ToList(); // Pooled wasnt working well here
-                Predicate<LootItem> p = x => // Search Predicate
-                {
-                    return names.Any(a => x.Name.Contains(a, StringComparison.OrdinalIgnoreCase));
-                };
-                return item =>
+                Predicate<LootItem> p = item => // Search Predicate
                 {
                     if (item is LootAirdrop)
                         return true;
-                    return item.ContainsSearchPredicate(p);
+                    return names.Any(a => item.Name.Contains(a, StringComparison.OrdinalIgnoreCase));
+                };
+                return item =>
+                {
+                    return p(item);
                 };
             }
         }

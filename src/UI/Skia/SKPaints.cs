@@ -370,6 +370,14 @@ namespace LoneEftDmaRadar.UI.Skia
             IsAntialias = true,
         };
 
+        public static SKPaint PaintQuestZone { get; } = new()
+        {
+            Color = SKColors.DeepPink,
+            StrokeWidth = 0.25f,
+            Style = SKPaintStyle.Fill,
+            IsAntialias = true,
+        };
+
         public static SKPaint PaintQuestItem { get; } = new()
         {
             Color = SKColors.YellowGreen,
@@ -381,6 +389,21 @@ namespace LoneEftDmaRadar.UI.Skia
         public static SKPaint TextQuestItem { get; } = new()
         {
             Color = SKColors.YellowGreen,
+            IsStroke = false,
+            IsAntialias = true,
+        };
+
+        public static SKPaint PaintWishlistItem { get; } = new()
+        {
+            Color = SKColors.Lime,
+            StrokeWidth = 0.25f,
+            Style = SKPaintStyle.Fill,
+            IsAntialias = true,
+        };
+
+        public static SKPaint TextWishlistItem { get; } = new()
+        {
+            Color = SKColors.Lime,
             IsStroke = false,
             IsAntialias = true,
         };

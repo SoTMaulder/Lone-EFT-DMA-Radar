@@ -123,6 +123,11 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Loot
         public bool Important => CustomFilter?.Important ?? false;
 
         /// <summary>
+        /// True if this item is wishlisted.
+        /// </summary>
+        public bool IsWishlisted => Config.Loot.ShowWishlist && LocalPlayer.WishlistItems.Contains(ID);
+
+        /// <summary>
         /// True if the item is blacklisted via the UI.
         /// </summary>
         public bool Blacklisted => CustomFilter?.Blacklisted ?? false;
@@ -133,6 +138,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Loot
         public bool IsWeapon => _item.IsWeapon;
         public bool IsCurrency => _item.IsCurrency;
         public bool IsQuestItem { get; init; }
+        public bool IsQuestHelperItem => App.Config.QuestHelper.Enabled && (Memory.QuestManager?.ItemConditions?.ContainsKey(ID) ?? false);
 
         /// <summary>
         /// Checks if an item exceeds regular loot price threshold.
@@ -169,18 +175,8 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Loot
             {
                 if (Blacklisted)
                     return false;
-                return _item.Important;
+                return _item.Important || IsWishlisted;
             }
-        }
-
-        /// <summary>
-        /// True if this item contains the specified Search Predicate.
-        /// </summary>
-        /// <param name="predicate"></param>
-        /// <returns>True if search matches, otherwise False.</returns>
-        public bool ContainsSearchPredicate(Predicate<LootItem> predicate)
-        {
-            return predicate(this);
         }
 
         private readonly Vector3 _position; // FilteredLoot doesn't move, readonly ok
@@ -256,6 +252,10 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Loot
 
         private ValueTuple<SKPaint, SKPaint> GetPaints()
         {
+            if (IsQuestHelperItem)
+                return new(SKPaints.PaintQuestItem, SKPaints.TextQuestItem);
+            if (IsWishlisted)
+                return new(SKPaints.PaintWishlistItem, SKPaints.TextWishlistItem);
             if (LootFilter.ShowBackpacks && IsBackpack)
                 return new(SKPaints.PaintBackpacks, SKPaints.TextBackpacks);
             if (LootFilter.ShowMeds && IsMeds)
