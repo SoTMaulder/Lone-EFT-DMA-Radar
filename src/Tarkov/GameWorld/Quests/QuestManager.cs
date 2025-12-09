@@ -1,12 +1,13 @@
 ﻿using Collections.Pooled;
 using LoneEftDmaRadar.Tarkov.Unity.Collections;
+using System.Collections.Frozen;
 
 namespace LoneEftDmaRadar.Tarkov.GameWorld.Quests
 {
     public sealed class QuestManager
     {
         private readonly ulong _profile;
-        private DateTimeOffset _last = DateTimeOffset.MinValue;
+        private RateLimiter _ratelimit = new(TimeSpan.FromSeconds(1));
 
         public QuestManager(ulong profile)
         {
@@ -47,8 +48,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Quests
         {
             try
             {
-                var now = DateTimeOffset.UtcNow;
-                if (now - _last < TimeSpan.FromSeconds(1))
+                if (!_ratelimit.TryEnter())
                     return;
                 using var masterQuests = new PooledSet<string>(StringComparer.OrdinalIgnoreCase);
                 using var masterItems = new PooledSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -124,7 +124,6 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Quests
                         _locations.TryRemove(oldLoc, out _);
                     }
                 }
-                _last = now;
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
@@ -133,6 +132,16 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Quests
             }
         }
 
+
+        private static readonly FrozenSet<QuestObjectiveType> _skipObjectiveTypes = new HashSet<QuestObjectiveType>
+        {
+            QuestObjectiveType.BuildWeapon,
+            QuestObjectiveType.GiveQuestItem,
+            QuestObjectiveType.Extract,
+            QuestObjectiveType.Shoot,
+            QuestObjectiveType.TraderLevel,
+            QuestObjectiveType.GiveItem
+        }.ToFrozenSet();
 
         private void FilterConditions(TarkovDataManager.TaskElement task, string questId, PooledSet<string> completedConditions, PooledSet<string> masterItems, PooledSet<string> masterLocations)
         {
@@ -150,16 +159,9 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Quests
                     // Skip objectives that are already completed (by condition id)
                     if (!string.IsNullOrEmpty(objective.Id) && completedConditions.Contains(objective.Id))
                         continue;
-                    //skip Type: buildWeapon, giveQuestItem, extract, shoot, traderLevel, giveItem
-                    if (objective.Type == QuestObjectiveType.BuildWeapon
-                        || objective.Type == QuestObjectiveType.GiveQuestItem
-                        || objective.Type == QuestObjectiveType.Extract
-                        || objective.Type == QuestObjectiveType.Shoot
-                        || objective.Type == QuestObjectiveType.TraderLevel
-                        || objective.Type == QuestObjectiveType.GiveItem)
-                    {
+
+                    if (_skipObjectiveTypes.Contains(objective.Type))
                         continue;
-                    }
 
                     // Item Pickup Objectives findItem and findQuestItem
                     if (objective.Type == QuestObjectiveType.FindQuestItem)

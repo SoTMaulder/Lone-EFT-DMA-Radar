@@ -26,6 +26,7 @@ SOFTWARE.
  *
 */
 
+using LoneEftDmaRadar.UI.Hotkeys.Internal;
 using LoneEftDmaRadar.UI.Misc;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
@@ -65,7 +66,7 @@ namespace LoneEftDmaRadar.UI.Hotkeys
         {
             _parent = parent ?? throw new ArgumentNullException(nameof(parent));
             // populate the two dropdowns:
-            Controllers = new ObservableCollection<HotkeyActionController>(HotkeyAction.Controllers);
+            Controllers = new ObservableCollection<HotkeyActionController>(HotkeyAction.RegisteredControllers);
             AvailableKeys = new ObservableCollection<ComboHotkeyValue>(_allKeys.Select(code => new ComboHotkeyValue(code)));
 
             // seed the listbox from whatever was in config:

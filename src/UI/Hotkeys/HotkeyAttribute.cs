@@ -29,48 +29,38 @@ SOFTWARE.
 namespace LoneEftDmaRadar.UI.Hotkeys
 {
     /// <summary>
-    /// Links a Unity Hotkey to it's Action Controller.
-    /// Wrapper for GUI/Backend Interop.
+    /// Used to decorate methods as Hotkey action handlers.
     /// </summary>
-    public sealed class HotkeyAction
+    /// <remarks>
+    /// Methods decorated with this attribute should match the method signature of <see cref="HotkeyDelegate"/>.
+    /// </remarks>
+    [AttributeUsage(AttributeTargets.Method)]
+    public sealed class HotkeyAttribute : Attribute
     {
         /// <summary>
-        /// Registered Hotkey Action Controllers (API Internal).
-        /// </summary>
-        internal static ConcurrentBag<HotkeyActionController> Controllers { get; } = new();
-        /// <summary>
-        /// Action Name used for lookup.
+        /// Name of the Hotkey to be displayed to the User.
         /// </summary>
         public string Name { get; }
         /// <summary>
-        /// Action Controller to execute.
+        /// Type of Hotkey activation. Default: OnKeyStateChanged
         /// </summary>
-        private HotkeyActionController Action { get; set; }
+        public HotkeyType Type { get; } = HotkeyType.OnKeyStateChanged;
+        /// <summary>
+        /// Interval (ms) between Hotkey activations. Default: 100ms
+        /// </summary>
+        public double Interval { get; } = 100;
 
-        public HotkeyAction(string name)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="HotkeyAttribute"/> class.
+        /// </summary>
+        /// <param name="name">Name of the Hotkey to be displayed to the User.</param>
+        /// <param name="type">Type of Hotkey activation. Default: OnKeyStateChanged</param>
+        /// <param name="interval">Interval (ms) between Hotkey activations. Default: 100ms</param>
+        public HotkeyAttribute(string name, HotkeyType type = HotkeyType.OnKeyStateChanged, double interval = 100)
         {
             Name = name;
+            Type = type;
+            Interval = interval;
         }
-
-        /// <summary>
-        /// Register an action controller.
-        /// </summary>
-        /// <param name="controller">Controller to register.</param>
-        internal static void RegisterController(HotkeyActionController controller)
-        {
-            Controllers.Add(controller);
-        }
-
-        /// <summary>
-        /// Execute the Hotkey action controller.
-        /// </summary>
-        /// <param name="isKeyDown">True if the key is pressed.</param>
-        public void Execute(bool isKeyDown)
-        {
-            Action ??= Controllers.FirstOrDefault(x => x.Name == Name);
-            Action?.Execute(isKeyDown);
-        }
-
-        public override string ToString() => Name;
     }
 }

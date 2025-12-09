@@ -26,44 +26,20 @@ SOFTWARE.
  *
 */
 
-using LoneEftDmaRadar.Misc.Workers;
-using LoneEftDmaRadar.UI.Hotkeys;
-using VmmSharpEx;
-using VmmSharpEx.Extensions.Input;
-
-namespace LoneEftDmaRadar.DMA
+namespace LoneEftDmaRadar.UI.Hotkeys
 {
-    public sealed class InputManager
+    /// <summary>
+    /// Enumeration of Hotkey Types.
+    /// </summary>
+    public enum HotkeyType
     {
-        private readonly VmmInputManager _input;
-        private readonly WorkerThread _thread;
-
-        public InputManager(Vmm vmm)
-        {
-            _input = new VmmInputManager(vmm);
-            _thread = new()
-            {
-                Name = nameof(InputManager),
-                SleepDuration = TimeSpan.FromMilliseconds(12),
-                SleepMode = WorkerThreadSleepMode.DynamicSleep
-            };
-            _thread.PerformWork += InputManager_PerformWork;
-            _thread.Start();
-        }
-
-        private void InputManager_PerformWork(object sender, WorkerThreadArgs e)
-        {
-            var hotkeys = HotkeyManagerViewModel.Hotkeys;
-            if (hotkeys.Count == 0)
-                return;
-
-            _input.UpdateKeys();
-            foreach (var kvp in hotkeys)
-            {
-                bool isKeyDown = _input.IsKeyDown(kvp.Key);
-                kvp.Value.Execute(isKeyDown);
-            }
-        }
+        /// <summary>
+        /// Hotkey fires once when the key state changes (pressed or released).
+        /// </summary>
+        OnKeyStateChanged,
+        /// <summary>
+        /// Hotkey fires repeatedly at the specified interval while the key is held down.
+        /// </summary>
+        OnIntervalElapsed
     }
-
 }
