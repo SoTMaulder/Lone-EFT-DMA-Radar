@@ -26,8 +26,10 @@ SOFTWARE.
  *
 */
 
+using Collections.Pooled;
 using LoneEftDmaRadar.Tarkov;
 using LoneEftDmaRadar.Tarkov.GameWorld.Loot;
+using LoneEftDmaRadar.Tarkov.GameWorld.Quests;
 using LoneEftDmaRadar.UI.ColorPicker;
 using LoneEftDmaRadar.UI.Data;
 using LoneEftDmaRadar.UI.Hotkeys;
@@ -58,6 +60,7 @@ namespace LoneEftDmaRadar.UI.Radar.ViewModels
             OpenConfigCommand = new SimpleCommand(OnOpenConfig);
             InitializeContainers();
             SetScaleValues(UIScale);
+            parent.IsVisibleChanged += Parent_IsVisibleChanged;
         }
 
         private void OnAboutUrl()
@@ -144,7 +147,7 @@ namespace LoneEftDmaRadar.UI.Radar.ViewModels
                     MessageBox.Show(MainWindow.Instance, "Overwrite backup?", "Backup Config", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                     return;
 
-                await File.WriteAllTextAsync(backupFile, JsonSerializer.Serialize(App.Config, new JsonSerializerOptions { WriteIndented = true }));
+                await File.WriteAllTextAsync(backupFile, JsonSerializer.Serialize(App.Config, App.JsonOptions));
                 MessageBox.Show(MainWindow.Instance, $"Backed up to {backupFile}", "Backup Config");
             }
             catch (Exception ex)
@@ -229,21 +232,21 @@ namespace LoneEftDmaRadar.UI.Radar.ViewModels
             SKPaints.PaintBoss.StrokeWidth = 1.66f * newScale;
             SKPaints.PaintFocused.StrokeWidth = 1.66f * newScale;
             SKPaints.PaintPScav.StrokeWidth = 1.66f * newScale;
-            SKPaints.PaintCorpse.StrokeWidth = 3 * newScale;
-            SKPaints.PaintMeds.StrokeWidth = 3 * newScale;
-            SKPaints.PaintFood.StrokeWidth = 3 * newScale;
-            SKPaints.PaintBackpacks.StrokeWidth = 3 * newScale;
-            SKPaints.PaintQuestItem.StrokeWidth = 3 * newScale;
-            SKPaints.PaintWishlistItem.StrokeWidth = 3 * newScale;
-            SKPaints.QuestHelperPaint.StrokeWidth = 3 * newScale;
-            SKPaints.PaintDeathMarker.StrokeWidth = 3 * newScale;
-            SKPaints.PaintLoot.StrokeWidth = 3 * newScale;
-            SKPaints.PaintImportantLoot.StrokeWidth = 3 * newScale;
-            SKPaints.PaintContainerLoot.StrokeWidth = 3 * newScale;
-            SKPaints.PaintTransparentBacker.StrokeWidth = 1 * newScale;
-            SKPaints.PaintExplosives.StrokeWidth = 3 * newScale;
-            SKPaints.PaintExfil.StrokeWidth = 1 * newScale;
-            SKPaints.PaintExfilTransit.StrokeWidth = 1 * newScale;
+            SKPaints.PaintCorpse.StrokeWidth = 0.25f * newScale;
+            SKPaints.PaintMeds.StrokeWidth = 0.25f * newScale;
+            SKPaints.PaintFood.StrokeWidth = 0.25f * newScale;
+            SKPaints.PaintBackpacks.StrokeWidth = 0.25f * newScale;
+            SKPaints.PaintDeathMarker.StrokeWidth = 3f * newScale;
+            SKPaints.PaintLoot.StrokeWidth = 0.25f * newScale;
+            SKPaints.PaintImportantLoot.StrokeWidth = 0.25f * newScale;
+            SKPaints.PaintContainerLoot.StrokeWidth = 0.25f * newScale;
+            SKPaints.PaintTransparentBacker.StrokeWidth = 0.25f * newScale;
+            SKPaints.PaintExplosives.StrokeWidth = 3f * newScale;
+            SKPaints.PaintExfil.StrokeWidth = 0.25f * newScale;
+            SKPaints.PaintExfilTransit.StrokeWidth = 0.25f * newScale;
+            SKPaints.PaintQuestZone.StrokeWidth = 0.25f * newScale;
+            SKPaints.PaintQuestItem.StrokeWidth = 0.25f * newScale;
+            SKPaints.PaintWishlistItem.StrokeWidth = 0.25f * newScale;
             // Fonts
             SKFonts.UIRegular.Size = 12f * newScale;
             SKFonts.UILarge.Size = 48f * newScale;
@@ -337,15 +340,15 @@ namespace LoneEftDmaRadar.UI.Radar.ViewModels
             }
         }
 
-        public bool ShowMines
+        public bool ShowHazards
         {
-            get => App.Config.UI.ShowMines;
+            get => App.Config.UI.ShowHazards;
             set
             {
-                if (App.Config.UI.ShowMines != value)
+                if (App.Config.UI.ShowHazards != value)
                 {
-                    App.Config.UI.ShowMines = value;
-                    OnPropertyChanged(nameof(ShowMines));
+                    App.Config.UI.ShowHazards = value;
+                    OnPropertyChanged(nameof(ShowHazards));
                 }
             }
         }
@@ -406,9 +409,35 @@ namespace LoneEftDmaRadar.UI.Radar.ViewModels
             }
         }
 
+        public bool ShowExfils
+        {
+            get => App.Config.UI.ShowExfils;
+            set
+            {
+                if (App.Config.UI.ShowExfils != value)
+                {
+                    App.Config.UI.ShowExfils = value;
+                    OnPropertyChanged(nameof(ShowExfils));
+                }
+            }
+        }
+
         #endregion
 
         #region Loot
+
+        public bool LootWishlist
+        {
+            get => App.Config.Loot.ShowWishlist;
+            set
+            {
+                if (App.Config.Loot.ShowWishlist != value)
+                {
+                    App.Config.Loot.ShowWishlist = value;
+                    OnPropertyChanged(nameof(LootWishlist));
+                }
+            }
+        }
 
         public bool ShowStaticContainers
         {
@@ -454,5 +483,45 @@ namespace LoneEftDmaRadar.UI.Radar.ViewModels
 
         #endregion
 
+        #region Quest Helper
+
+        public ObservableCollection<QuestEntry> CurrentQuests { get; } = new();
+
+        public bool QuestHelperEnabled
+        {
+            get => App.Config.QuestHelper.Enabled;
+            set
+            {
+                if (App.Config.QuestHelper.Enabled != value)
+                {
+                    App.Config.QuestHelper.Enabled = value;
+                    OnPropertyChanged(nameof(QuestHelperEnabled));
+                }
+            }
+        }
+
+        private void Parent_IsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
+        {
+            if (e.NewValue is bool visible && visible &&
+                Memory.QuestManager?.Quests is IReadOnlyDictionary<string, QuestEntry> quests)
+            {
+                using var currentQuests = CurrentQuests.ToPooledList(); // snapshot
+                using var existingIds = new PooledSet<string>(currentQuests.Select(q => q.Id), StringComparer.OrdinalIgnoreCase);
+                using var newIds = new PooledSet<string>(quests.Keys, StringComparer.OrdinalIgnoreCase);
+
+                // remove stale
+                foreach (var q in currentQuests.Where(q => !newIds.Contains(q.Id)))
+                    CurrentQuests.Remove(q);
+
+                // add missing
+                foreach (var key in newIds)
+                {
+                    if (!existingIds.Contains(key) && quests.TryGetValue(key, out var newQuest))
+                        CurrentQuests.Add(newQuest);
+                }
+            }
+        }
+
+        #endregion
     }
 }

@@ -106,6 +106,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Loot
             }
         }
 
+
         /// <summary>
         /// Number of grid spaces this item takes up.
         /// </summary>
@@ -124,7 +125,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Loot
         /// <summary>
         /// True if this item is wishlisted.
         /// </summary>
-        public bool IsWishlisted => Config.Loot.ShowWishlist && LocalPlayer.WishlistItems.Contains(ID);
+        public bool IsWishlisted => Config.Loot.ShowWishlist && LocalPlayer.WishlistItems.ContainsKey(ID);
 
         /// <summary>
         /// True if the item is blacklisted via the UI.
@@ -136,6 +137,8 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Loot
         public bool IsBackpack => _item.IsBackpack;
         public bool IsWeapon => _item.IsWeapon;
         public bool IsCurrency => _item.IsCurrency;
+        public bool IsQuestItem { get; init; }
+        public bool IsQuestHelperItem => App.Config.QuestHelper.Enabled && (Memory.QuestManager?.ItemConditions?.ContainsKey(ID) ?? false);
 
         /// <summary>
         /// Checks if an item exceeds regular loot price threshold.
@@ -174,16 +177,6 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Loot
                     return false;
                 return _item.Important || IsWishlisted;
             }
-        }
-
-        /// <summary>
-        /// True if this item contains the specified Search Predicate.
-        /// </summary>
-        /// <param name="predicate"></param>
-        /// <returns>True if search matches, otherwise False.</returns>
-        public bool ContainsSearchPredicate(Predicate<LootItem> predicate)
-        {
-            return predicate(this);
         }
 
         private readonly Vector3 _position; // FilteredLoot doesn't move, readonly ok
@@ -243,7 +236,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Loot
         /// Gets a UI Friendly Label.
         /// </summary>
         /// <returns>Item Label string cleaned up for UI usage.</returns>
-        public string GetUILabel()
+        public virtual string GetUILabel()
         {
             string label = "";
             if (IsImportant)
@@ -259,6 +252,8 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Loot
 
         private ValueTuple<SKPaint, SKPaint> GetPaints()
         {
+            if (IsQuestHelperItem)
+                return new(SKPaints.PaintQuestItem, SKPaints.TextQuestItem);
             if (IsWishlisted)
                 return new(SKPaints.PaintWishlistItem, SKPaints.TextWishlistItem);
             if (LootFilter.ShowBackpacks && IsBackpack)
@@ -267,6 +262,8 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Loot
                 return new(SKPaints.PaintMeds, SKPaints.TextMeds);
             if (LootFilter.ShowFood && IsFood)
                 return new(SKPaints.PaintFood, SKPaints.TextFood);
+            if (LootFilter.ShowQuestItems && IsQuestItem)
+                return new(SKPaints.PaintQuestItem, SKPaints.TextQuestItem);
             string filterColor = CustomFilter?.Color;
 
             if (!string.IsNullOrEmpty(filterColor))

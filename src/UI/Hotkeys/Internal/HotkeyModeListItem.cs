@@ -26,7 +26,7 @@ SOFTWARE.
  *
 */
 
-namespace LoneEftDmaRadar.UI.Hotkeys
+namespace LoneEftDmaRadar.UI.Hotkeys.Internal
 {
     public sealed class HotkeyModeListItem
     {

@@ -42,14 +42,14 @@ namespace LoneEftDmaRadar.UI.ColorPicker
         FocusedPlayer,
         DeathMarker,
         RegularLoot,
-        ValuableLoot,
+        ValuableLoot, // Formerly ImportantLoot
         WishlistLoot,
         ContainerLoot,
         MedsFilterLoot,
         FoodFilterLoot,
         BackpacksFilterLoot,
-        QuestLoot,
-        StaticQuestItemsAndZones,
+        QuestHelperItems,
+        QuestHelperZones,
         Corpse,
         Explosives
     }

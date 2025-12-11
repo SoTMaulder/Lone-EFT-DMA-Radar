@@ -104,7 +104,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
             try
             {
                 var groupIdPtr = Memory.ReadPtr(Info + Offsets.PlayerInfo.GroupId);
-                string groupId = Memory.ReadUnicodeString(groupIdPtr);
+                string groupId = Memory.ReadUnityString(groupIdPtr);
                 return _groups.GetOrAdd(
                     groupId,
                     _ => Interlocked.Increment(ref _lastGroupNumber));
@@ -118,7 +118,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
         private ulong GetMovementContext()
         {
             var movementContext = Memory.ReadPtr(this + Offsets.Player.MovementContext);
-            var player = Memory.ReadPtr(movementContext + Offsets.MovementContext.Player, false);
+            var player = Memory.ReadPtr(movementContext + Offsets.MovementContext._player, false);
             if (player != this)
                 throw new ArgumentOutOfRangeException(nameof(movementContext));
             return movementContext;

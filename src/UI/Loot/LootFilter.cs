@@ -39,6 +39,7 @@ namespace LoneEftDmaRadar.UI.Loot
         public static bool ShowMeds;
         public static bool ShowFood;
         public static bool ShowBackpacks;
+        public static bool ShowQuestItems;
 
         /// <summary>
         /// Creates a loot filter based on current FilteredLoot Filter settings.
@@ -50,12 +51,19 @@ namespace LoneEftDmaRadar.UI.Loot
             bool usePrices = string.IsNullOrEmpty(search);
             if (usePrices)
             {
-                Predicate<LootItem> p = x => // Default Predicate
+                Predicate<LootItem> p = item => // Default Predicate
                 {
-                    return (x.IsRegularLoot || x.IsValuableLoot || x.IsImportant || x.IsWishlisted) ||
-                                (ShowBackpacks && x.IsBackpack) ||
-                                (ShowMeds && x.IsMeds) ||
-                                (ShowFood && x.IsFood);
+                    if (App.Config.QuestHelper.Enabled && item.IsQuestHelperItem)
+                        return true;
+                    if (item is LootAirdrop)
+                        return true;
+                    if (!App.Config.Loot.HideCorpses && item is LootCorpse)
+                        return true;
+                    return (item.IsRegularLoot || item.IsValuableLoot || item.IsImportant || item.IsWishlisted) ||
+                                (ShowBackpacks && item.IsBackpack) ||
+                                (ShowMeds && item.IsMeds) ||
+                                (ShowFood && item.IsFood) ||
+                                (ShowQuestItems && item.IsQuestItem);
                 };
                 return item =>
                 {
@@ -65,13 +73,15 @@ namespace LoneEftDmaRadar.UI.Loot
             else // FilteredLoot Search
             {
                 var names = search!.Split(',').Select(a => a.Trim()).ToList(); // Pooled wasnt working well here
-                Predicate<LootItem> p = x => // Search Predicate
+                Predicate<LootItem> p = item => // Search Predicate
                 {
-                    return names.Any(a => x.Name.Contains(a, StringComparison.OrdinalIgnoreCase));
+                    if (item is LootAirdrop)
+                        return true;
+                    return names.Any(a => item.Name.Contains(a, StringComparison.OrdinalIgnoreCase));
                 };
                 return item =>
                 {
-                    return item.ContainsSearchPredicate(p);
+                    return p(item);
                 };
             }
         }

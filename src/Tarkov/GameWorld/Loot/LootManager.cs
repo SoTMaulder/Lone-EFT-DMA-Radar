@@ -32,7 +32,7 @@ using LoneEftDmaRadar.Tarkov.Unity.Collections;
 using LoneEftDmaRadar.Tarkov.Unity.Structures;
 using LoneEftDmaRadar.UI.Loot;
 
-namespace LoneEftDmaRadar.Tarkov.GameWorld.Loot.Helpers
+namespace LoneEftDmaRadar.Tarkov.GameWorld.Loot
 {
     public sealed class LootManager
     {
@@ -41,16 +41,16 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Loot.Helpers
         private readonly ulong _lgw;
         private readonly Lock _filterSync = new();
         private readonly ConcurrentDictionary<ulong, LootItem> _loot = new();
+        private readonly HashSet<string> _loggedQuestItems = new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// All loot (with filter applied).
         /// </summary>
         public IReadOnlyList<LootItem> FilteredLoot { get; private set; }
-
         /// <summary>
-        /// All unfiltered loot.
+        /// All Static Containers on the map.
         /// </summary>
-        public IEnumerable<LootItem> AllLoot => _loot.Values;
+        public IEnumerable<StaticLootContainer> StaticContainers => _loot.Values.OfType<StaticLootContainer>();
 
         public LootManager(ulong localGameWorld)
         {
@@ -73,10 +73,9 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Loot.Helpers
                 {
                     var filter = LootFilter.Create();
                     FilteredLoot = _loot.Values?
-                        .OfType<LootItem>()
                         .Where(x => filter(x))
-                        .OrderByDescending(x => x.Important)
-                        .ThenByDescending(x => x?.Price ?? 0)
+                        .OrderBy(x => x.Important)
+                        .ThenBy(x => x?.Price ?? 0)
                         .ToList();
                 }
                 catch { }
@@ -236,7 +235,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Loot.Helpers
                     var corpse = new LootCorpse(interactiveClass, pos);
                     _ = _loot.TryAdd(p.ItemBase, corpse);
                 }
-                if (isContainer)
+                else if (isContainer)
                 {
                     try
                     {
@@ -247,7 +246,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Loot.Helpers
                         else
                         {
                             var itemOwner = Memory.ReadPtr(interactiveClass + Offsets.LootableContainer.ItemOwner);
-                            var ownerItemBase = Memory.ReadPtr(itemOwner + Offsets.LootableContainerItemOwner.RootItem);
+                            var ownerItemBase = Memory.ReadPtr(itemOwner + Offsets.ItemController.RootItem);
                             var ownerItemTemplate = Memory.ReadPtr(ownerItemBase + Offsets.LootItem.Template);
                             var ownerItemMongoId = Memory.ReadValue<MongoID>(ownerItemTemplate + Offsets.ItemTemplate._id);
                             var ownerItemId = ownerItemMongoId.ReadString();
@@ -268,10 +267,17 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Loot.Helpers
                     var id = mongoId.ReadString();
                     if (isQuestItem)
                     {
-                        var shortNamePtr = Memory.ReadPtr(itemTemplate + Offsets.ItemTemplate.ShortName);
-                        var shortName = Memory.ReadUnicodeString(shortNamePtr, 128);
-                        Debug.WriteLine(shortName);
-                        _ = _loot.TryAdd(p.ItemBase, new LootItem(id, $"Q_{shortName}", pos));
+                        if (!_loggedQuestItems.Contains(id))
+                        {
+                            var shortNamePtr = Memory.ReadPtr(itemTemplate + Offsets.ItemTemplate.ShortName);
+                            var shortName = Memory.ReadUnityString(shortNamePtr, 128);
+                            if (shortName.Any(c => c > 127))
+                            {
+                                shortName = id.Length > 8 ? id[^8..] : id; // Edge case some shortnames are russki
+                            }
+                            _ = _loot.TryAdd(p.ItemBase, new LootItem(id, $"Q_{shortName}", pos) { IsQuestItem = true });
+                            _loggedQuestItems.Add(id);
+                        }
                     }
                     else
                     {

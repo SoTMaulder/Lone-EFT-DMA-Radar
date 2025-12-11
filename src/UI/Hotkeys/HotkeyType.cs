@@ -26,20 +26,20 @@ SOFTWARE.
  *
 */
 
-namespace LoneEftDmaRadar.Tarkov.GameWorld.Loot.Helpers
+namespace LoneEftDmaRadar.UI.Hotkeys
 {
-    internal static class LootExtensions
+    /// <summary>
+    /// Enumeration of Hotkey Types.
+    /// </summary>
+    public enum HotkeyType
     {
         /// <summary>
-        /// Order loot (important first, then by price).
+        /// Hotkey fires once when the key state changes (pressed or released).
         /// </summary>
-        /// <param name="loot"></param>
-        /// <returns>Ordered loot.</returns>
-        public static IEnumerable<LootItem> OrderLoot(this IEnumerable<LootItem> loot)
-        {
-            return loot
-                .OrderByDescending(x => x.IsImportant)
-                .ThenByDescending(x => x.Price);
-        }
+        OnKeyStateChanged,
+        /// <summary>
+        /// Hotkey fires repeatedly at the specified interval while the key is held down.
+        /// </summary>
+        OnIntervalElapsed
     }
 }

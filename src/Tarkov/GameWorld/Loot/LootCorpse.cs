@@ -30,7 +30,6 @@ using Collections.Pooled;
 using LoneEftDmaRadar.Misc;
 using LoneEftDmaRadar.Tarkov.GameWorld.Player;
 using LoneEftDmaRadar.UI.Radar.Maps;
-using LoneEftDmaRadar.UI.Radar.ViewModels;
 using LoneEftDmaRadar.UI.Skia;
 using LoneEftDmaRadar.Web.TarkovDev.Data;
 
@@ -66,6 +65,8 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Loot
             Player ??= deadPlayers?.FirstOrDefault(x => x.Corpse == _corpse);
             Player?.LootObject ??= this;
         }
+
+        public override string GetUILabel() => this.Name;
 
         public override void Draw(SKCanvas canvas, EftMapParams mapParams, LocalPlayer localPlayer)
         {
@@ -110,8 +111,6 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Loot
 
         public override void DrawMouseover(SKCanvas canvas, EftMapParams mapParams, LocalPlayer localPlayer)
         {
-            if (!RadarViewModel.LootCorpsesVisible)
-                return;
             using var lines = new PooledList<string>();
             if (Player is AbstractPlayer player)
             {

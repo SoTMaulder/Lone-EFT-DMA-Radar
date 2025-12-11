@@ -28,18 +28,10 @@ SOFTWARE.
 
 namespace LoneEftDmaRadar.UI.Hotkeys
 {
-    public sealed class HotkeyEventArgs : EventArgs
-    {
-        /// <summary>
-        /// State of the Hotkey.
-        /// True: Key is down.
-        /// False: Key is up.
-        /// </summary>
-        public bool State { get; }
-
-        public HotkeyEventArgs(bool state)
-        {
-            State = state;
-        }
-    }
+    /// <summary>
+    /// Represents a method that is called when a hotkey is activated or deactivated.
+    /// </summary>
+    /// <param name="isKeyDown">A value indicating whether the hotkey is currently active. <see langword="true"/> if the hotkey is pressed;
+    /// otherwise, <see langword="false"/>.</param>
+    public delegate void HotkeyDelegate(bool isKeyDown);
 }

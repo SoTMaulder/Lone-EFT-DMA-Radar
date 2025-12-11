@@ -36,6 +36,7 @@ using LoneEftDmaRadar.UI.Radar.Maps;
 using LoneEftDmaRadar.UI.Radar.ViewModels;
 using LoneEftDmaRadar.UI.Skia;
 using LoneEftDmaRadar.Web.TarkovDev.Data;
+using System.Collections.Frozen;
 using VmmSharpEx.Scatter;
 using static LoneEftDmaRadar.Tarkov.Unity.Structures.UnityTransform;
 
@@ -120,8 +121,6 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
         /// <summary>
         /// Allocates a player.
         /// </summary>
-        /// <param name="regPlayers">Player Dictionary collection to add the newly allocated player to.</param>
-        /// <param name="playerBase">Player base memory address.</param>
         public static void Allocate(ConcurrentDictionary<ulong, AbstractPlayer> regPlayers, ulong playerBase)
         {
             try
@@ -188,11 +187,8 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
             private set
             {
                 _rotation = value;
-                float mapRotation = value.X; // Cache value
-                mapRotation -= 90f;
-                while (mapRotation < 0f)
-                    mapRotation += 360f;
-                MapRotation = mapRotation;
+                float mapRotation = value.X - 90f;
+                MapRotation = ((mapRotation % 360f) + 360f) % 360f;
             }
         }
 
@@ -236,7 +232,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
         #region Virtual Properties
 
         /// <summary>
-        /// Player name.
+        /// Player nickName.
         /// </summary>
         public virtual string Name { get; set; }
 
@@ -375,7 +371,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
         /// <summary>
         /// Update the Alerts for this Player Object.
         /// </summary>
-        /// <param name="alert">Alert to set.</param>
+        /// <param nickName="alert">Alert to set.</param>
         public void UpdateAlerts(string alert)
         {
             if (alert is null)
@@ -392,7 +388,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
         /// <summary>
         /// Validates the Rotation Address.
         /// </summary>
-        /// <param name="rotationAddr">Rotation va</param>
+        /// <param nickName="rotationAddr">Rotation va</param>
         /// <returns>Validated rotation virtual address.</returns>
         protected static ulong ValidateRotationAddr(ulong rotationAddr)
         {
@@ -408,9 +404,9 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
         /// <summary>
         /// Refreshes non-realtime player information. Call in the Registered Players Loop (T0).
         /// </summary>
-        /// <param name="scatter"></param>
-        /// <param name="registered"></param>
-        /// <param name="isActiveParam"></param>
+        /// <param nickName="scatter"></param>
+        /// <param nickName="registered"></param>
+        /// <param nickName="isActiveParam"></param>
         public virtual void OnRegRefresh(VmmScatter scatter, ISet<ulong> registered, bool? isActiveParam = null)
         {
             if (isActiveParam is not bool isActive)
@@ -435,7 +431,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
         /// <summary>
         /// Mark player as dead.
         /// </summary>
-        /// <param name="corpse">Corpse address.</param>
+        /// <param nickName="corpse">Corpse address.</param>
         public void SetDead(ulong corpse)
         {
             Corpse = corpse;
@@ -464,7 +460,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
         /// <summary>
         /// Executed on each Realtime Loop.
         /// </summary>
-        /// <param name="index">Scatter read index dedicated to this player.</param>
+        /// <param nickName="index">Scatter read index dedicated to this player.</param>
         public virtual void OnRealtimeLoop(VmmScatter scatter)
         {
             scatter.PrepareReadValue<Vector2>(RotationAddress); // Rotation
@@ -477,7 +473,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
                 if (s.ReadValue<Vector2>(RotationAddress, out var rotation))
                     successRot = SetRotation(rotation);
 
-                if (s.ReadArray<TrsX>(SkeletonRoot.VerticesAddr, SkeletonRoot.Count) is PooledMemory<TrsX> vertices)
+                if (s.ReadPooled<TrsX>(SkeletonRoot.VerticesAddr, SkeletonRoot.Count) is IMemoryOwner<TrsX> vertices)
                 {
                     using (vertices)
                     {
@@ -485,7 +481,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
                         {
                             try
                             {
-                                _ = SkeletonRoot.UpdatePosition(vertices.Span);
+                                _ = SkeletonRoot.UpdatePosition(vertices.Memory.Span);
                             }
                             catch (Exception ex) // Attempt to re-allocate Transform on error
                             {
@@ -508,9 +504,9 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
         /// <summary>
         /// Executed on each Transform Validation Loop.
         /// </summary>
-        /// <param name="round1">Index (round 1)</param>
-        /// <param name="round2">Index (round 2)</param>
-        public void OnValidateTransforms(VmmScatter round1, VmmScatter round2)
+        /// <param nickName="round1">Index (round 1)</param>
+        /// <param nickName="round2">Index (round 2)</param>
+        public virtual void OnValidateTransforms(VmmScatter round1, VmmScatter round2)
         {
             round1.PrepareReadPtr(SkeletonRoot.TransformInternal + UnitySDK.UnityOffsets.TransformAccess_HierarchyOffset); // Bone Hierarchy
             round1.Completed += (sender, x1) =>
@@ -560,171 +556,50 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
 
         #region AI Player Types
 
-        public readonly struct AIRole
+        private static readonly FrozenDictionary<string, AIRole> _aiRoles = new Dictionary<string, AIRole>(StringComparer.OrdinalIgnoreCase)
         {
-            public readonly string Name { get; init; }
-            public readonly PlayerType Type { get; init; }
-        }
+            ["BossSanitar"] = new() { Name = "Sanitar", Type = PlayerType.AIBoss },
+            ["BossBully"] = new() { Name = "Reshala", Type = PlayerType.AIBoss },
+            ["BossGluhar"] = new() { Name = "Gluhar", Type = PlayerType.AIBoss },
+            ["SectantPriest"] = new() { Name = "Priest", Type = PlayerType.AIBoss },
+            ["SectantWarrior"] = new() { Name = "Cultist", Type = PlayerType.AIRaider },
+            ["BossKilla"] = new() { Name = "Killa", Type = PlayerType.AIBoss },
+            ["BossTagilla"] = new() { Name = "Tagilla", Type = PlayerType.AIBoss },
+            ["Boss_Partizan"] = new() { Name = "Partisan", Type = PlayerType.AIBoss },
+            ["BossBigPipe"] = new() { Name = "Big Pipe", Type = PlayerType.AIBoss },
+            ["BossBirdEye"] = new() { Name = "Birdeye", Type = PlayerType.AIBoss },
+            ["BossKnight"] = new() { Name = "Knight", Type = PlayerType.AIBoss },
+            ["Arena_Guard_1"] = new() { Name = "Arena Guard", Type = PlayerType.AIScav },
+            ["Arena_Guard_2"] = new() { Name = "Arena Guard", Type = PlayerType.AIScav },
+            ["Boss_Kaban"] = new() { Name = "Kaban", Type = PlayerType.AIBoss },
+            ["Boss_Kollontay"] = new() { Name = "Kollontay", Type = PlayerType.AIBoss },
+            ["Boss_Sturman"] = new() { Name = "Shturman", Type = PlayerType.AIBoss },
+            ["Zombie_Generic"] = new() { Name = "Zombie", Type = PlayerType.AIScav },
+            ["BossZombieTagilla"] = new() { Name = "Zombie Tagilla", Type = PlayerType.AIBoss },
+            ["Zombie_Fast"] = new() { Name = "Zombie", Type = PlayerType.AIScav },
+            ["Zombie_Medium"] = new() { Name = "Zombie", Type = PlayerType.AIScav },
+        }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// Lookup AI Info based on Voice Line.
         /// </summary>
-        /// <param name="voiceLine"></param>
         /// <returns></returns>
         public static AIRole GetAIRoleInfo(string voiceLine)
         {
-            switch (voiceLine)
+            if (_aiRoles.TryGetValue(voiceLine, out var role))
+                return role;
+            
+            // Fallback pattern matching
+            return voiceLine switch
             {
-                case "BossSanitar":
-                    return new AIRole
-                    {
-                        Name = "Sanitar",
-                        Type = PlayerType.AIBoss
-                    };
-                case "BossBully":
-                    return new AIRole
-                    {
-                        Name = "Reshala",
-                        Type = PlayerType.AIBoss
-                    };
-                case "BossGluhar":
-                    return new AIRole
-                    {
-                        Name = "Gluhar",
-                        Type = PlayerType.AIBoss
-                    };
-                case "SectantPriest":
-                    return new AIRole
-                    {
-                        Name = "Priest",
-                        Type = PlayerType.AIBoss
-                    };
-                case "SectantWarrior":
-                    return new AIRole
-                    {
-                        Name = "Cultist",
-                        Type = PlayerType.AIRaider
-                    };
-                case "BossKilla":
-                    return new AIRole
-                    {
-                        Name = "Killa",
-                        Type = PlayerType.AIBoss
-                    };
-                case "BossTagilla":
-                    return new AIRole
-                    {
-                        Name = "Tagilla",
-                        Type = PlayerType.AIBoss
-                    };
-                case "Boss_Partizan":
-                    return new AIRole
-                    {
-                        Name = "Partisan",
-                        Type = PlayerType.AIBoss
-                    };
-                case "BossBigPipe":
-                    return new AIRole
-                    {
-                        Name = "Big Pipe",
-                        Type = PlayerType.AIBoss
-                    };
-                case "BossBirdEye":
-                    return new AIRole
-                    {
-                        Name = "Birdeye",
-                        Type = PlayerType.AIBoss
-                    };
-                case "BossKnight":
-                    return new AIRole
-                    {
-                        Name = "Knight",
-                        Type = PlayerType.AIBoss
-                    };
-                case "Arena_Guard_1":
-                    return new AIRole
-                    {
-                        Name = "Arena Guard",
-                        Type = PlayerType.AIScav
-                    };
-                case "Arena_Guard_2":
-                    return new AIRole
-                    {
-                        Name = "Arena Guard",
-                        Type = PlayerType.AIScav
-                    };
-                case "Boss_Kaban":
-                    return new AIRole
-                    {
-                        Name = "Kaban",
-                        Type = PlayerType.AIBoss
-                    };
-                case "Boss_Kollontay":
-                    return new AIRole
-                    {
-                        Name = "Kollontay",
-                        Type = PlayerType.AIBoss
-                    };
-                case "Boss_Sturman":
-                    return new AIRole
-                    {
-                        Name = "Shturman",
-                        Type = PlayerType.AIBoss
-                    };
-                case "Zombie_Generic":
-                    return new AIRole
-                    {
-                        Name = "Zombie",
-                        Type = PlayerType.AIScav
-                    };
-                case "BossZombieTagilla":
-                    return new AIRole
-                    {
-                        Name = "Zombie Tagilla",
-                        Type = PlayerType.AIBoss
-                    };
-                case "Zombie_Fast":
-                    return new AIRole
-                    {
-                        Name = "Zombie",
-                        Type = PlayerType.AIScav
-                    };
-                case "Zombie_Medium":
-                    return new AIRole
-                    {
-                        Name = "Zombie",
-                        Type = PlayerType.AIScav
-                    };
-            }
-            if (voiceLine.Contains("scav", StringComparison.OrdinalIgnoreCase))
-                return new AIRole
-                {
-                    Name = "Scav",
-                    Type = PlayerType.AIScav
-                };
-            if (voiceLine.Contains("boss", StringComparison.OrdinalIgnoreCase))
-                return new AIRole
-                {
-                    Name = "Boss",
-                    Type = PlayerType.AIBoss
-                };
-            if (voiceLine.Contains("usec", StringComparison.OrdinalIgnoreCase))
-                return new AIRole
-                {
-                    Name = "Usec",
-                    Type = PlayerType.AIRaider
-                };
-            if (voiceLine.Contains("bear", StringComparison.OrdinalIgnoreCase))
-                return new AIRole
-                {
-                    Name = "Bear",
-                    Type = PlayerType.AIRaider
-                };
-            Debug.WriteLine($"Unknown Voice Line: {voiceLine}");
-            return new AIRole
-            {
-                Name = "AI",
-                Type = PlayerType.AIScav
+                _ when voiceLine.Contains("scav", StringComparison.OrdinalIgnoreCase) => new() { Name = "Scav", Type = PlayerType.AIScav },
+                _ when voiceLine.Contains("boss", StringComparison.OrdinalIgnoreCase) => new() { Name = "Boss", Type = PlayerType.AIBoss },
+                _ when voiceLine.Contains("usec", StringComparison.OrdinalIgnoreCase) => new() { Name = "Usec", Type = PlayerType.AIRaider },
+                _ when voiceLine.Contains("bear", StringComparison.OrdinalIgnoreCase) => new() { Name = "Bear", Type = PlayerType.AIRaider },
+                _ when voiceLine.Contains("black_division", StringComparison.OrdinalIgnoreCase) => new() { Name = "BD", Type = PlayerType.AIRaider },
+                _ when voiceLine.Contains("vsrf", StringComparison.OrdinalIgnoreCase) => new() { Name = "Vsrf", Type = PlayerType.AIRaider },
+                _ when voiceLine.Contains("civilian", StringComparison.OrdinalIgnoreCase) => new() { Name = "Civ", Type = PlayerType.AIScav },
+                _ => new() { Name = "AI", Type = PlayerType.AIScav }
             };
         }
 
@@ -735,52 +610,62 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
         public virtual ref readonly Vector3 Position => ref SkeletonRoot.Position;
         public Vector2 MouseoverPosition { get; set; }
 
+        [ThreadStatic]
+        private static StringBuilder _drawStringBuilder;
+
+        private ValueTuple<SKPaint, SKPaint> _paints;
         public void Draw(SKCanvas canvas, EftMapParams mapParams, LocalPlayer localPlayer)
         {
             try
             {
                 var point = Position.ToMapPos(mapParams.Map).ToZoomedPos(mapParams);
                 MouseoverPosition = new Vector2(point.X, point.Y);
-                if (!IsAlive) // Player Dead -- Draw 'X' death marker and move on
+                if (!IsAlive)
                 {
                     DrawDeathMarker(canvas, point);
+                    return;
+                }
+                _paints = GetPaints();
+                
+                DrawPlayerPill(canvas, localPlayer, point);
+                if (this == localPlayer)
+                    return;
+                    
+                var height = Position.Y - localPlayer.Position.Y;
+                var dist = Vector3.Distance(localPlayer.Position, Position);
+                
+                _drawStringBuilder ??= new StringBuilder(64);
+                _drawStringBuilder.Clear();
+                
+                using var lines = new PooledList<string>(2);
+                if (!App.Config.UI.HideNames)
+                {
+                    string name = IsError ? "ERROR" : Name;
+                    if (this is ObservedPlayer observed)
+                    {
+                        if (observed.Profile?.Level is int levelResult)
+                            _drawStringBuilder.Append('L').Append(levelResult).Append(':');
+                        _drawStringBuilder.Append(name);
+                        if (observed.HealthStatus is not Enums.ETagStatus.Healthy)
+                            _drawStringBuilder.Append(" (").Append(observed.HealthStatus).Append(')');
+                    }
+                    else
+                    {
+                        _drawStringBuilder.Append(name);
+                    }
+                    lines.Add(_drawStringBuilder.ToString());
+                    _drawStringBuilder.Clear();
+                    _drawStringBuilder.Append("H: ").AppendFormat("{0:n0}", height)
+                                      .Append(" D: ").AppendFormat("{0:n0}", dist);
+                    lines.Add(_drawStringBuilder.ToString());
                 }
                 else
                 {
-                    DrawPlayerPill(canvas, localPlayer, point);
-                    if (this == localPlayer)
-                        return;
-                    var height = Position.Y - localPlayer.Position.Y;
-                    var dist = Vector3.Distance(localPlayer.Position, Position);
-                    using var lines = new PooledList<string>();
-                    if (!App.Config.UI.HideNames) // show full names & info
-                    {
-                        string name = null;
-                        if (IsError)
-                            name = "ERROR"; // In case POS stops updating, let us know!
-                        else
-                            name = Name;
-                        string health = null; string level = null;
-                        if (this is ObservedPlayer observed)
-                        {
-                            health = observed.HealthStatus is Enums.ETagStatus.Healthy
-                                ? null
-                                : $" ({observed.HealthStatus})"; // Only display abnormal health status
-                            if (observed.Profile?.Level is int levelResult)
-                                level = $"L{levelResult}:";
-                        }
-                        lines.Add($"{level}{name}{health}");
-                        lines.Add($"H: {height:n0} D: {dist:n0}");
-                    }
-                    else // just height, distance
-                    {
-                        lines.Add($"{height:n0},{dist:n0}");
-                        if (IsError)
-                            lines[0] = "ERROR"; // In case POS stops updating, let us know!
-                    }
-
-                    DrawPlayerText(canvas, point, lines);
+                    _drawStringBuilder.AppendFormat("{0:n0}", height).Append(',').AppendFormat("{0:n0}", dist);
+                    lines.Add(IsError ? "ERROR" : _drawStringBuilder.ToString());
                 }
+
+                DrawPlayerText(canvas, point, lines);
             }
             catch (Exception ex)
             {
@@ -793,9 +678,8 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
         /// </summary>
         private void DrawPlayerPill(SKCanvas canvas, LocalPlayer localPlayer, SKPoint point)
         {
-            var paints = GetPaints();
             if (this != localPlayer && RadarViewModel.MouseoverGroup is int grp && grp == GroupID)
-                paints.Item1 = SKPaints.PaintMouseoverGroup;
+                _paints.Item1 = SKPaints.PaintMouseoverGroup;
 
             float scale = 1.65f * App.Config.UI.UIScale;
 
@@ -804,10 +688,10 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
             canvas.Scale(scale, scale);
             canvas.RotateDegrees(MapRotation);
 
-            SKPaints.ShapeOutline.StrokeWidth = paints.Item1.StrokeWidth * 1.3f;
+            SKPaints.ShapeOutline.StrokeWidth = _paints.Item1.StrokeWidth * 1.3f;
             // Draw the pill
             canvas.DrawPath(_playerPill, SKPaints.ShapeOutline); // outline
-            canvas.DrawPath(_playerPill, paints.Item1);
+            canvas.DrawPath(_playerPill, _paints.Item1);
 
             var aimlineLength = this == localPlayer || (IsFriendly && App.Config.UI.TeammateAimlines) ?
                 App.Config.UI.AimLineLength : 0;
@@ -820,7 +704,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
             {
                 // Draw line from nose tip forward
                 canvas.DrawLine(PP_NOSE_X, 0, PP_NOSE_X + aimlineLength, 0, SKPaints.ShapeOutline); // outline
-                canvas.DrawLine(PP_NOSE_X, 0, PP_NOSE_X + aimlineLength, 0, paints.Item1);
+                canvas.DrawLine(PP_NOSE_X, 0, PP_NOSE_X + aimlineLength, 0, _paints.Item1);
             }
 
             canvas.Restore();
@@ -845,9 +729,8 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
         /// </summary>
         private void DrawPlayerText(SKCanvas canvas, SKPoint point, IList<string> lines)
         {
-            var paints = GetPaints();
             if (RadarViewModel.MouseoverGroup is int grp && grp == GroupID)
-                paints.Item2 = SKPaints.TextMouseoverGroup;
+                _paints.Item2 = SKPaints.TextMouseoverGroup;
             point.Offset(9.5f * App.Config.UI.UIScale, 0);
             foreach (var line in lines)
             {
@@ -856,7 +739,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
 
 
                 canvas.DrawText(line, point, SKTextAlign.Left, SKFonts.UIRegular, SKPaints.TextOutline); // Draw outline
-                canvas.DrawText(line, point, SKTextAlign.Left, SKFonts.UIRegular, paints.Item2); // draw line text
+                canvas.DrawText(line, point, SKTextAlign.Left, SKFonts.UIRegular, _paints.Item2); // draw line text
 
                 point.Offset(0, SKFonts.UIRegular.Spacing);
             }
@@ -891,51 +774,61 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
             }
         }
 
+        [ThreadStatic]
+        private static StringBuilder _mouseoverStringBuilder;
+
         public void DrawMouseover(SKCanvas canvas, EftMapParams mapParams, LocalPlayer localPlayer)
         {
             if (this == localPlayer)
                 return;
-            using var lines = new PooledList<string>();
+            
+            _mouseoverStringBuilder ??= new StringBuilder(128);
+            using var lines = new PooledList<string>(8);
+            
             var name = App.Config.UI.HideNames && IsHuman ? "<Hidden>" : Name;
-            string health = null;
-            if (this is ObservedPlayer observed)
-                health = observed.HealthStatus is Enums.ETagStatus.Healthy
-                    ? null
-                    : $" ({observed.HealthStatus.ToString()})"; // Only display abnormal health status
-            if (this is ObservedPlayer obs && obs.IsStreaming) // Streamer Notice
+            var obs = this as ObservedPlayer;
+            
+            if (obs?.IsStreaming == true)
                 lines.Add("[LIVE TTV - Double Click]");
-            string alert = Alerts?.Trim();
-            if (!string.IsNullOrEmpty(alert)) // Special Players,etc.
+                
+            if (Alerts?.Trim() is string alert && alert.Length > 0)
                 lines.Add(alert);
-            if (IsHostileActive) // Enemy Players, display information
+                
+            if (IsHostileActive)
             {
-                lines.Add($"{name}{health} {AccountID}".Trim());
-                var faction = PlayerSide.ToString();
-                string g = null;
+                _mouseoverStringBuilder.Clear();
+                _mouseoverStringBuilder.Append(name);
+                if (obs?.HealthStatus is Enums.ETagStatus status && status != Enums.ETagStatus.Healthy)
+                    _mouseoverStringBuilder.Append(" (").Append(status).Append(')');
+                _mouseoverStringBuilder.Append(' ').Append(AccountID);
+                lines.Add(_mouseoverStringBuilder.ToString().Trim());
+                
+                _mouseoverStringBuilder.Clear();
+                _mouseoverStringBuilder.Append(PlayerSide.ToString());
                 if (GroupID != -1)
-                    g = $" G:{GroupID} ";
-                lines.Add($"{faction}{g}");
+                    _mouseoverStringBuilder.Append(" G:").Append(GroupID).Append(' ');
+                lines.Add(_mouseoverStringBuilder.ToString());
             }
             else if (!IsAlive)
             {
-                lines.Add($"{Type.ToString()}:{name}");
-                string g = null;
+                lines.Add($"{Type}:{name}");
                 if (GroupID != -1)
-                    g = $"G:{GroupID} ";
-                if (g is not null) lines.Add(g);
+                    lines.Add($"G:{GroupID} ");
             }
             else if (IsAIActive)
             {
                 lines.Add(name);
             }
-            if (this is ObservedPlayer obs2 &&
-                obs2.Equipment.Items is IReadOnlyDictionary<string, TarkovMarketItem> equipment)
+            
+            if (obs?.Equipment.Items is IReadOnlyDictionary<string, TarkovMarketItem> equipment)
             {
-                // This is outside of the previous conditionals to always show equipment even if they're dead,etc.
-                lines.Add($"Value: {Utilities.FormatNumberKM(obs2.Equipment.Value)}");
+                lines.Add($"Value: {Utilities.FormatNumberKM(obs.Equipment.Value)}");
                 foreach (var item in equipment.OrderBy(e => e.Key))
                 {
-                    lines.Add($"{item.Key.Substring(0, 5)}: {item.Value.ShortName}");
+                    _mouseoverStringBuilder.Clear();
+                    _mouseoverStringBuilder.Append(item.Key.AsSpan(0, Math.Min(5, item.Key.Length)));
+                    _mouseoverStringBuilder.Append(": ").Append(item.Value.ShortName);
+                    lines.Add(_mouseoverStringBuilder.ToString());
                 }
             }
 
@@ -947,7 +840,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
         #region High Alert
 
         /// <summary>
-        /// True if Current Player is facing <paramref name="target"/>.
+        /// True if Current Player is facing <paramref nickName="target"/>.
         /// </summary>
         public bool IsFacingTarget(AbstractPlayer target, float? maxDist = null)
         {
@@ -1009,4 +902,6 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
 
         #endregion
     }
+
+    public readonly record struct AIRole(string Name, PlayerType Type);
 }
