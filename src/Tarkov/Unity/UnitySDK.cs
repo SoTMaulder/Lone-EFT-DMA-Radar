@@ -1,7 +1,7 @@
 ﻿/*
- * Lone EFT DMA Radar
- * Brought to you by Lone (Lone DMA)
- * 
+* Lone EFT DMA Radar
+* Brought to you by Lone (Lone DMA)
+* 
 MIT License
 
 Copyright (c) 2025 Lone DMA
@@ -23,7 +23,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
- *
+*
 */
 
 using LoneEftDmaRadar.Tarkov.Unity.Structures;
@@ -34,20 +34,20 @@ namespace LoneEftDmaRadar.Tarkov.Unity
     {
         public readonly struct UnityOffsets
         {
-            public const uint GameObjectManager = 0x1A21378;
+            public const uint GameObjectManager = 0x1A208D8;
 
             public const uint GameObject_ObjectClassOffset = 0x80;
             public const uint GameObject_ComponentsOffset = 0x58;
             public const uint GameObject_NameOffset = 0x88;
 
-            public const uint Component_ObjectClassOffset = 0x40;
+            public const uint Component_ObjectClassOffset = 0x20;
             public const uint Component_GameObjectOffset = 0x58;
 
-            public const uint TransformAccess_IndexOffset = 0x90;
-            public const uint TransformAccess_HierarchyOffset = 0x88;
+            public const uint TransformAccess_IndexOffset = 0x98;
+            public const uint TransformAccess_HierarchyOffset = 0x90;
 
             public const uint Hierarchy_VerticesOffset = 0x40;
-            public const uint Hierarchy_IndicesOffset = 0x68;
+            public const uint Hierarchy_IndicesOffset = 0x90;
 
             public static readonly uint[] GameWorldChain =
             [
