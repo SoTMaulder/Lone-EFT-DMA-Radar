@@ -67,7 +67,88 @@ namespace LoneEftDmaRadar.Tarkov
         /// <summary>
         /// XP Table for Tarkov.
         /// </summary>
-        public static IReadOnlyDictionary<int, int> XPTable { get; private set; }
+        public static IReadOnlyDictionary<int, int> XPTable { get; } = new Dictionary<int, int>
+        {
+            [0] = 1,
+            [1_000] = 2,
+            [4_017] = 3,
+            [8_432] = 4,
+            [14_256] = 5,
+            [21_477] = 6,
+            [30_023] = 7,
+            [39_936] = 8,
+            [51_204] = 9,
+            [63_723] = 10,
+            [77_563] = 11,
+            [93_279] = 12,
+            [115_302] = 13,
+            [143_253] = 14,
+            [177_337] = 15,
+            [217_885] = 16,
+            [264_432] = 17,
+            [316_851] = 18,
+            [374_400] = 19,
+            [437_465] = 20,
+            [505_161] = 21,
+            [577_978] = 22,
+            [656_347] = 23,
+            [741_150] = 24,
+            [836_066] = 25,
+            [944_133] = 26,
+            [1_066_259] = 27,
+            [1_199_423] = 28,
+            [1_343_743] = 29,
+            [1_499_338] = 30,
+            [1_666_320] = 31,
+            [1_846_664] = 32,
+            [2_043_349] = 33,
+            [2_258_436] = 34,
+            [2_492_126] = 35,
+            [2_750_217] = 36,
+            [3_032_022] = 37,
+            [3_337_766] = 38,
+            [3_663_831] = 39,
+            [4_010_401] = 40,
+            [4_377_662] = 41,
+            [4_765_799] = 42,
+            [5_182_399] = 43,
+            [5_627_732] = 44,
+            [6_102_063] = 45,
+            [6_630_287] = 46,
+            [7_189_442] = 47,
+            [7_779_792] = 48,
+            [8_401_607] = 49,
+            [9_055_144] = 50,
+            [9_740_666] = 51,
+            [10_458_431] = 52,
+            [11_219_666] = 53,
+            [12_024_744] = 54,
+            [12_874_041] = 55,
+            [13_767_918] = 56,
+            [14_706_741] = 57,
+            [15_690_872] = 58,
+            [16_720_667] = 59,
+            [17_816_442] = 60,
+            [19_041_492] = 61,
+            [20_360_945] = 62,
+            [21_792_266] = 63,
+            [23_350_443] = 64,
+            [25_098_462] = 65,
+            [27_100_775] = 66,
+            [29_581_231] = 67,
+            [33_028_574] = 68,
+            [37_953_544] = 69,
+            [44_260_543] = 70,
+            [51_901_513] = 71,
+            [60_887_711] = 72,
+            [71_228_846] = 73,
+            [82_933_459] = 74,
+            [96_009_180] = 75,
+            [110_462_910] = 76,
+            [126_300_949] = 77,
+            [144_924_572] = 78,
+            [172_016_256] = 79
+        };
 
         #region Startup
 
@@ -160,7 +241,11 @@ namespace LoneEftDmaRadar.Tarkov
                     StringComparer.OrdinalIgnoreCase
                 )
                 .ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-            XPTable = data.PlayerLevels?.ToDictionary(x => x.Exp, x => x.Level) ?? new Dictionary<int, int>();
+            // Tarkov.Dev XP Table out of date (TODO)
+            //XPTable = data.PlayerLevels?
+            //    .OrderBy(x => x.Exp)
+            //    .ToDictionary(x => x.Exp, x => x.Level) 
+            //    ?? new Dictionary<int, int>();
             var maps = data.Maps.ToDictionary(x => x.NameId, StringComparer.OrdinalIgnoreCase) ??
                 new Dictionary<string, MapElement>(StringComparer.OrdinalIgnoreCase);
             maps.TryAdd("Terminal", new MapElement() // Preliminary terminal support
@@ -168,7 +253,7 @@ namespace LoneEftDmaRadar.Tarkov
                 Name = "Terminal",
                 NameId = "Terminal"
             });
-            MapData = maps.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase) ?? new Dictionary<string, MapElement>().ToFrozenDictionary();
+            MapData = maps.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         }
 
         /// <summary>
