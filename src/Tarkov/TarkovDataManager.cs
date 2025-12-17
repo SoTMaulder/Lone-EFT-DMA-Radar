@@ -26,21 +26,20 @@ SOFTWARE.
  *
 */
 
-using LoneEftDmaRadar.Tarkov.GameWorld.Hazards;
-using LoneEftDmaRadar.Tarkov.GameWorld.Quests;
 using LoneEftDmaRadar.Web.TarkovDev.Data;
 using System.Collections.Frozen;
 
 namespace LoneEftDmaRadar.Tarkov
 {
     /// <summary>
-    /// Manages Tarkov Dynamic Data (Items, Quests, etc).
+    /// Manages Tarkov Dynamic Data (TarkovDevItems, Quests, etc).
     /// </summary>
     public static class TarkovDataManager
     {
-        private static readonly FileInfo _bakDataFile = new(Path.Combine(App.ConfigPath.FullName, "data.json.bak"));
-        private static readonly FileInfo _tempDataFile = new(Path.Combine(App.ConfigPath.FullName, "data.json.tmp"));
-        private static readonly FileInfo _dataFile = new(Path.Combine(App.ConfigPath.FullName, "data.json"));
+        private const string DATA_FILE = "data.json";
+        private static readonly FileInfo _dataFile = new(Path.Combine(App.ConfigPath.FullName, DATA_FILE));
+        private static readonly FileInfo _tempDataFile = new(Path.Combine(App.ConfigPath.FullName, DATA_FILE + ".tmp"));
+        private static readonly FileInfo _bakDataFile = new(Path.Combine(App.ConfigPath.FullName, DATA_FILE + ".bak"));
 
         /// <summary>
         /// Master items dictionary - mapped via BSGID String.
@@ -55,100 +54,20 @@ namespace LoneEftDmaRadar.Tarkov
         /// <summary>
         /// Maps Data for Tarkov.
         /// </summary>
-        public static FrozenDictionary<string, MapElement> MapData { get; private set; }
+        public static FrozenDictionary<string, TarkovDevTypes.MapElement> MapData { get; private set; }
         /// <summary>
         ///  Tasks Data for Tarkov.
         /// </summary>
-        public static FrozenDictionary<string, TaskElement> TaskData { get; private set; }
+        public static FrozenDictionary<string, TarkovDevTypes.TaskElement> TaskData { get; private set; }
         /// <summary>
         /// All Task Zones mapped by MapID -> ZoneID -> Position.
         /// </summary>
         public static FrozenDictionary<string, FrozenDictionary<string, Vector3>> TaskZones { get; private set; }
         /// <summary>
         /// XP Table for Tarkov.
+        /// Key: Cumulative XP Required, Value: Player Level.
         /// </summary>
-        public static IReadOnlyDictionary<int, int> XPTable { get; } = new Dictionary<int, int>
-        {
-            [0] = 1,
-            [1_000] = 2,
-            [4_017] = 3,
-            [8_432] = 4,
-            [14_256] = 5,
-            [21_477] = 6,
-            [30_023] = 7,
-            [39_936] = 8,
-            [51_204] = 9,
-            [63_723] = 10,
-            [77_563] = 11,
-            [93_279] = 12,
-            [115_302] = 13,
-            [143_253] = 14,
-            [177_337] = 15,
-            [217_885] = 16,
-            [264_432] = 17,
-            [316_851] = 18,
-            [374_400] = 19,
-            [437_465] = 20,
-            [505_161] = 21,
-            [577_978] = 22,
-            [656_347] = 23,
-            [741_150] = 24,
-            [836_066] = 25,
-            [944_133] = 26,
-            [1_066_259] = 27,
-            [1_199_423] = 28,
-            [1_343_743] = 29,
-            [1_499_338] = 30,
-            [1_666_320] = 31,
-            [1_846_664] = 32,
-            [2_043_349] = 33,
-            [2_258_436] = 34,
-            [2_492_126] = 35,
-            [2_750_217] = 36,
-            [3_032_022] = 37,
-            [3_337_766] = 38,
-            [3_663_831] = 39,
-            [4_010_401] = 40,
-            [4_377_662] = 41,
-            [4_765_799] = 42,
-            [5_182_399] = 43,
-            [5_627_732] = 44,
-            [6_102_063] = 45,
-            [6_630_287] = 46,
-            [7_189_442] = 47,
-            [7_779_792] = 48,
-            [8_401_607] = 49,
-            [9_055_144] = 50,
-            [9_740_666] = 51,
-            [10_458_431] = 52,
-            [11_219_666] = 53,
-            [12_024_744] = 54,
-            [12_874_041] = 55,
-            [13_767_918] = 56,
-            [14_706_741] = 57,
-            [15_690_872] = 58,
-            [16_720_667] = 59,
-            [17_816_442] = 60,
-            [19_041_492] = 61,
-            [20_360_945] = 62,
-            [21_792_266] = 63,
-            [23_350_443] = 64,
-            [25_098_462] = 65,
-            [27_100_775] = 66,
-            [29_581_231] = 67,
-            [33_028_574] = 68,
-            [37_953_544] = 69,
-            [44_260_543] = 70,
-            [51_901_513] = 71,
-            [60_887_711] = 72,
-            [71_228_846] = 73,
-            [82_933_459] = 74,
-            [96_009_180] = 75,
-            [110_462_910] = 76,
-            [126_300_949] = 77,
-            [144_924_572] = 78,
-            [172_016_256] = 79
-        };
+        public static IReadOnlyDictionary<int, int> XPTable { get; private set; }
 
         #region Startup
 
@@ -156,7 +75,7 @@ namespace LoneEftDmaRadar.Tarkov
         /// Call to start EftDataManager Module. ONLY CALL ONCE.
         /// </summary>
         /// <param name="loading">Loading UI Form.</param>
-        /// <param name="defaultOnly">True if you want to load cached/default data only.</param>
+        /// <param name="defaultOnly">True if you want to load cached/default query only.</param>
         /// <returns></returns>
         /// <exception cref="Exception"></exception>
         public static async Task ModuleInitAsync(bool defaultOnly = false)
@@ -177,7 +96,7 @@ namespace LoneEftDmaRadar.Tarkov
 
         /// <summary>
         /// Loads Game/FilteredLoot Data and sets the static dictionaries.
-        /// If updated data is needed, spawns a background task to retrieve it.
+        /// If updated query is needed, spawns a background task to retrieve it.
         /// </summary>
         /// <returns></returns>
         private static async Task LoadDataAsync()
@@ -202,7 +121,7 @@ namespace LoneEftDmaRadar.Tarkov
         /// Sets the input <paramref name="data"/> into the static dictionaries.
         /// </summary>
         /// <param name="data">Data to be set.</param>
-        private static void SetData(TarkovData data)
+        private static void SetData(TarkovDevData data)
         {
             AllItems = data.Items.Where(x => !x.Tags?.Contains("Static Container") ?? false)
                 .DistinctBy(x => x.BsgId, StringComparer.OrdinalIgnoreCase)
@@ -212,7 +131,7 @@ namespace LoneEftDmaRadar.Tarkov
                 .DistinctBy(x => x.BsgId, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(k => k.BsgId, v => v, StringComparer.OrdinalIgnoreCase)
                 .ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-            TaskData = (data.Tasks ?? new List<TaskElement>())
+            TaskData = (data.Tasks ?? new List<TarkovDevTypes.TaskElement>())
                 .Where(t => !string.IsNullOrWhiteSpace(t?.Id))
                 .DistinctBy(t => t.Id, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(t => t.Id, t => t, StringComparer.OrdinalIgnoreCase)
@@ -222,7 +141,7 @@ namespace LoneEftDmaRadar.Tarkov
                 .SelectMany(task => task.Objectives)   // Flatten the Objectives from each TaskElement
                 .Where(objective => objective.Zones is not null) // Ensure the Zones are not null
                 .SelectMany(objective => objective.Zones)    // Flatten the Zones from each Objective
-                .Where(zone => zone.Position is not null && zone.Map?.NameId is not null) // Ensure Position and Map are not null
+                .Where(zone => zone.Position != default && zone.Map?.NameId is not null) // Ensure Position and Map are not null
                 .GroupBy(zone => zone.Map.NameId, zone => new
                 {
                     id = zone.Id,
@@ -241,19 +160,36 @@ namespace LoneEftDmaRadar.Tarkov
                     StringComparer.OrdinalIgnoreCase
                 )
                 .ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-            // Tarkov.Dev XP Table out of date (TODO)
-            //XPTable = data.PlayerLevels?
-            //    .OrderBy(x => x.Exp)
-            //    .ToDictionary(x => x.Exp, x => x.Level) 
-            //    ?? new Dictionary<int, int>();
+            XPTable = BuildXPTable(data.PlayerLevels);
             var maps = data.Maps.ToDictionary(x => x.NameId, StringComparer.OrdinalIgnoreCase) ??
-                new Dictionary<string, MapElement>(StringComparer.OrdinalIgnoreCase);
-            maps.TryAdd("Terminal", new MapElement() // Preliminary terminal support
-            {
-                Name = "Terminal",
-                NameId = "Terminal"
-            });
+                new Dictionary<string, TarkovDevTypes.MapElement>(StringComparer.OrdinalIgnoreCase);
             MapData = maps.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Takes an input XP Table from Tarkov.Dev that is non-cumulative, and rebuilds the dictionary using cumulative XP Values for each level.
+        /// </summary>
+        private static Dictionary<int, int> BuildXPTable(List<TarkovDevTypes.PlayerLevelElement> list)
+        {
+            if (list is null || list.Count == 0)
+                return new();
+            var result = new Dictionary<int, int>(list.Count);
+            var ordered = list
+                .OrderBy(x => x.Level)
+                .ToList();
+
+            // First entry stays unchanged
+            result[ordered[0].Exp] = ordered[0].Level;
+            int runningSum = ordered[0].Exp;
+
+            // Remaining entries use cumulative keys
+            for (int i = 1; i < ordered.Count; i++)
+            {
+                runningSum += ordered[i].Exp;
+                result[runningSum] = ordered[i].Level;
+            }
+
+            return result;
         }
 
         /// <summary>
@@ -267,7 +203,7 @@ namespace LoneEftDmaRadar.Tarkov
             const string resource = "LoneEftDmaRadar.DEFAULT_DATA.json";
             using var dataStream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resource) ??
                 throw new ArgumentNullException(resource);
-            var data = await JsonSerializer.DeserializeAsync<TarkovData>(dataStream)
+            var data = await JsonSerializer.DeserializeAsync<TarkovDevData>(dataStream)
                 ?? throw new InvalidOperationException($"Failed to deserialize {nameof(dataStream)}");
             SetData(data);
         }
@@ -290,14 +226,14 @@ namespace LoneEftDmaRadar.Tarkov
             }
             SetData(data);
 
-            static async Task<TarkovData> TryLoadFromDiskAsync(FileInfo file)
+            static async Task<TarkovDevData> TryLoadFromDiskAsync(FileInfo file)
             {
                 try
                 {
                     if (!file.Exists)
                         return null;
                     using var dataStream = File.OpenRead(file.FullName);
-                    return await JsonSerializer.DeserializeAsync<TarkovData>(dataStream, App.JsonOptions) ??
+                    return await JsonSerializer.DeserializeAsync<TarkovDevData>(dataStream, App.JsonOptions) ??
                         throw new InvalidOperationException($"Failed to deserialize {nameof(dataStream)}");
                 }
                 catch
@@ -316,8 +252,11 @@ namespace LoneEftDmaRadar.Tarkov
         {
             try
             {
-                string dataJson = await TarkovDevDataJob.GetUpdatedDataAsync();
-                ArgumentNullException.ThrowIfNull(dataJson, nameof(dataJson));
+                var data = await TarkovDevDataJob.GetUpdatedDataAsync();
+                ArgumentNullException.ThrowIfNull(data, nameof(data));
+                var jsonOptions = new JsonSerializerOptions(App.JsonOptions);
+                jsonOptions.WriteIndented = false;
+                var dataJson = JsonSerializer.Serialize(data, jsonOptions);
                 await File.WriteAllTextAsync(_tempDataFile.FullName, dataJson);
                 if (_dataFile.Exists)
                 {
@@ -338,8 +277,6 @@ namespace LoneEftDmaRadar.Tarkov
                         destFileName: _dataFile.FullName,
                         overwrite: true);
                 }
-                var data = JsonSerializer.Deserialize<TarkovData>(dataJson, App.JsonOptions) ??
-                    throw new InvalidOperationException($"Failed to deserialize {nameof(dataJson)}");
                 SetData(data);
             }
             catch (Exception ex)
@@ -353,224 +290,6 @@ namespace LoneEftDmaRadar.Tarkov
                     options: MessageBoxOptions.DefaultDesktopOnly);
             }
         }
-
-        #endregion
-
-        #region Types
-
-        public sealed class TarkovData
-        {
-            [JsonPropertyName("items")]
-            public List<TarkovMarketItem> Items { get; set; } = new();
-
-            [JsonPropertyName("maps")]
-            public List<MapElement> Maps { get; set; } = new();
-
-            [JsonPropertyName("playerLevels")]
-            public List<PlayerLevelElement> PlayerLevels { get; set; }
-
-            [JsonPropertyName("tasks")]
-            public List<TaskElement> Tasks { get; set; } = new();
-        }
-
-        public partial class MapElement
-        {
-            [JsonPropertyName("name")]
-            public string Name { get; set; }
-
-            [JsonPropertyName("nameId")]
-            public string NameId { get; set; }
-
-            [JsonPropertyName("extracts")]
-            public List<ExtractElement> Extracts { get; set; } = new();
-
-            [JsonPropertyName("transits")]
-            public List<TransitElement> Transits { get; set; } = new();
-
-            [JsonPropertyName("hazards")]
-            public List<GenericWorldHazard> Hazards { get; set; } = new();
-        }
-
-        public partial class PlayerLevelElement
-        {
-            [JsonPropertyName("exp")]
-            public int Exp { get; set; }
-
-            [JsonPropertyName("level")]
-            public int Level { get; set; }
-        }
-
-        public partial class ExtractElement
-        {
-            [JsonPropertyName("name")]
-            public string Name { get; set; }
-
-            [JsonPropertyName("faction")]
-            public string Faction { get; set; }
-
-            [JsonPropertyName("position")]
-            public Vector3 Position { get; set; }
-
-            [JsonIgnore]
-            public bool IsPmc => Faction?.Equals("pmc", StringComparison.OrdinalIgnoreCase) ?? false;
-            [JsonIgnore]
-            public bool IsShared => Faction?.Equals("shared", StringComparison.OrdinalIgnoreCase) ?? false;
-        }
-
-        public partial class TransitElement
-        {
-            [JsonPropertyName("description")]
-            public string Description { get; set; }
-
-            [JsonPropertyName("position")]
-            public Vector3 Position { get; set; }
-        }
-
-
-        public partial class TaskElement
-        {
-            [JsonPropertyName("id")]
-            public string Id { get; set; }
-
-            [JsonPropertyName("name")]
-            public string Name { get; set; }
-
-            [JsonPropertyName("objectives")]
-            public List<ObjectiveElement> Objectives { get; set; }
-
-            public partial class ObjectiveElement
-            {
-                [JsonPropertyName("id")]
-                public string Id { get; set; }
-
-                [JsonPropertyName("type")]
-#pragma warning disable IDE1006 // Naming Styles
-                public string _type { get; set; }
-#pragma warning restore IDE1006 // Naming Styles
-
-                [JsonIgnore]
-                private static readonly FrozenDictionary<string, QuestObjectiveType> _objectiveTypes =
-    new Dictionary<string, QuestObjectiveType>(StringComparer.OrdinalIgnoreCase)
-    {
-        ["visit"] = QuestObjectiveType.Visit,
-        ["mark"] = QuestObjectiveType.Mark,
-        ["giveItem"] = QuestObjectiveType.GiveItem,
-        ["shoot"] = QuestObjectiveType.Shoot,
-        ["extract"] = QuestObjectiveType.Extract,
-        ["findQuestItem"] = QuestObjectiveType.FindQuestItem,
-        ["giveQuestItem"] = QuestObjectiveType.GiveQuestItem,
-        ["findItem"] = QuestObjectiveType.FindItem,
-        ["buildWeapon"] = QuestObjectiveType.BuildWeapon,
-        ["plantItem"] = QuestObjectiveType.PlantItem,
-        ["plantQuestItem"] = QuestObjectiveType.PlantQuestItem,
-        ["traderLevel"] = QuestObjectiveType.TraderLevel,
-        ["traderStanding"] = QuestObjectiveType.TraderStanding,
-        ["skill"] = QuestObjectiveType.Skill,
-        ["experience"] = QuestObjectiveType.Experience,
-        ["useItem"] = QuestObjectiveType.UseItem,
-        ["sellItem"] = QuestObjectiveType.SellItem,
-        ["taskStatus"] = QuestObjectiveType.TaskStatus,
-    }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-
-                [JsonIgnore]
-                public QuestObjectiveType Type =>
-                    _objectiveTypes.TryGetValue(_type, out var type) ? type : QuestObjectiveType.Unknown;
-
-                [JsonPropertyName("description")]
-                public string Description { get; set; }
-
-                [JsonPropertyName("requiredKeys")]
-                public List<List<MarkerItemClass>> RequiredKeys { get; set; }
-
-                [JsonPropertyName("maps")]
-                public List<TaskMapElement> Maps { get; set; }
-
-                [JsonPropertyName("zones")]
-                public List<TaskZoneElement> Zones { get; set; }
-
-                [JsonPropertyName("count")]
-                public int Count { get; set; }
-
-                [JsonPropertyName("foundInRaid")]
-                public bool FoundInRaid { get; set; }
-
-                [JsonPropertyName("item")]
-                public MarkerItemClass Item { get; set; }
-
-                [JsonPropertyName("questItem")]
-                public ObjectiveQuestItem QuestItem { get; set; }
-
-                [JsonPropertyName("markerItem")]
-                public MarkerItemClass MarkerItem { get; set; }
-
-                public class MarkerItemClass
-                {
-                    [JsonPropertyName("id")]
-                    public string Id { get; set; }
-
-                    [JsonPropertyName("name")]
-                    public string Name { get; set; }
-
-                    [JsonPropertyName("shortName")]
-                    public string ShortName { get; set; }
-                }
-
-                public class ObjectiveQuestItem
-                {
-                    [JsonPropertyName("id")]
-                    public string Id { get; set; }
-
-                    [JsonPropertyName("name")]
-                    public string Name { get; set; }
-
-                    [JsonPropertyName("shortName")]
-                    public string ShortName { get; set; }
-
-                    [JsonPropertyName("normalizedName")]
-                    public string NormalizedName { get; set; }
-
-                    [JsonPropertyName("description")]
-                    public string Description { get; set; }
-                }
-
-                public class TaskZoneElement
-                {
-                    [JsonPropertyName("id")]
-                    public string Id { get; set; }
-
-                    [JsonPropertyName("position")]
-                    public PositionElement Position { get; set; }
-
-                    [JsonPropertyName("map")]
-                    public TaskMapElement Map { get; set; }
-                }
-
-                public class TaskMapElement
-                {
-                    [JsonPropertyName("nameId")]
-                    public string NameId { get; set; }
-
-                    [JsonPropertyName("normalizedName")]
-                    public string NormalizedName { get; set; }
-
-                    [JsonPropertyName("name")]
-                    public string Name { get; set; }
-                }
-
-                public class PositionElement
-                {
-                    [JsonPropertyName("y")]
-                    public float Y { get; set; }
-
-                    [JsonPropertyName("x")]
-                    public float X { get; set; }
-
-                    [JsonPropertyName("z")]
-                    public float Z { get; set; }
-                }
-            }
-        }
-
 
         #endregion
     }
