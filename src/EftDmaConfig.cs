@@ -27,9 +27,10 @@ SOFTWARE.
 */
 
 using LoneEftDmaRadar.Misc.JSON;
+using LoneEftDmaRadar.UI;
 using LoneEftDmaRadar.UI.ColorPicker;
-using LoneEftDmaRadar.UI.Data;
 using LoneEftDmaRadar.UI.Loot;
+using LoneEftDmaRadar.UI.Misc;
 using System.Collections.ObjectModel;
 using VmmSharpEx.Extensions.Input;
 
@@ -326,13 +327,13 @@ namespace LoneEftDmaRadar
         private static readonly Lock _syncRoot = new();
 
         [JsonIgnore]
-        private static readonly FileInfo _configFile = new(Path.Combine(App.ConfigPath.FullName, Filename));
+        private static readonly FileInfo _configFile = new(Path.Combine(Program.ConfigPath.FullName, Filename));
 
         [JsonIgnore]
-        private static readonly FileInfo _tempFile = new(Path.Combine(App.ConfigPath.FullName, Filename + ".tmp"));
+        private static readonly FileInfo _tempFile = new(Path.Combine(Program.ConfigPath.FullName, Filename + ".tmp"));
 
         [JsonIgnore]
-        private static readonly FileInfo _backupFile = new(Path.Combine(App.ConfigPath.FullName, Filename + ".bak"));
+        private static readonly FileInfo _backupFile = new(Path.Combine(Program.ConfigPath.FullName, Filename + ".bak"));
 
         /// <summary>
         /// Loads the configuration from disk.
@@ -345,7 +346,7 @@ namespace LoneEftDmaRadar
             EftDmaConfig config;
             lock (_syncRoot)
             {
-                App.ConfigPath.Create();
+                Program.ConfigPath.Create();
                 if (_configFile.Exists)
                 {
                     config = TryLoad(_tempFile) ??
@@ -355,9 +356,10 @@ namespace LoneEftDmaRadar
                     if (config is null)
                     {
                         var dlg = MessageBox.Show(
+                            RadarWindow.Handle,
                             "Config File Corruption Detected! If you backed up your config, you may attempt to restore it.\n" +
                             "Press OK to Reset Config and continue startup, or CANCEL to terminate program.",
-                            App.Name,
+                            Program.Name,
                             MessageBoxButton.OKCancel,
                             MessageBoxImage.Error);
                         if (dlg == MessageBoxResult.Cancel)
@@ -383,7 +385,7 @@ namespace LoneEftDmaRadar
                 if (!file.Exists)
                     return null;
                 string json = File.ReadAllText(file.FullName);
-                return JsonSerializer.Deserialize<EftDmaConfig>(json, App.JsonOptions);
+                return JsonSerializer.Deserialize<EftDmaConfig>(json, Program.JsonOptions);
             }
             catch
             {
@@ -418,7 +420,7 @@ namespace LoneEftDmaRadar
 
         private static void SaveInternal(EftDmaConfig config)
         {
-            var json = JsonSerializer.Serialize(config, App.JsonOptions);
+            var json = JsonSerializer.Serialize(config, Program.JsonOptions);
             using (var fs = new FileStream(
                 _tempFile.FullName,
                 FileMode.Create,
@@ -481,7 +483,7 @@ namespace LoneEftDmaRadar
         /// Size of the Radar Window.
         /// </summary>
         [JsonPropertyName("windowSize")]
-        public Size WindowSize { get; set; } = new(1280, 720);
+        public SKSize WindowSize { get; set; } = new(1280, 720);
 
         /// <summary>
         /// Window is maximized.
@@ -614,7 +616,7 @@ namespace LoneEftDmaRadar
         /// Select all containers.
         /// </summary>
         [JsonPropertyName("selectAll")]
-        public bool SelectAll { get; set; } = true;
+        public bool SelectAll { get; set; } = false;
 
         /// <summary>
         /// Selected containers to display.
@@ -653,19 +655,6 @@ namespace LoneEftDmaRadar
         /// </summary>
         [JsonPropertyName("enabled")]
         public bool Enabled { get; set; } = true;
-
-        /// <summary>
-        /// True if the Aimview Widget is minimized.
-        /// </summary>
-        [JsonPropertyName("minimized")]
-        public bool Minimized { get; set; } = false;
-
-        /// <summary>
-        /// Aimview Location
-        /// </summary>
-        [JsonPropertyName("location")]
-        [JsonConverter(typeof(SKRectJsonConverter))]
-        public SKRect Location { get; set; }
     }
 
     public sealed class InfoWidgetConfig
@@ -675,19 +664,6 @@ namespace LoneEftDmaRadar
         /// </summary>
         [JsonPropertyName("enabled")]
         public bool Enabled { get; set; } = true;
-
-        /// <summary>
-        /// True if the Info Widget is minimized.
-        /// </summary>
-        [JsonPropertyName("minimized")]
-        public bool Minimized { get; set; } = false;
-
-        /// <summary>
-        /// ESP Widget Location
-        /// </summary>
-        [JsonPropertyName("location")]
-        [JsonConverter(typeof(SKRectJsonConverter))]
-        public SKRect Location { get; set; }
     }
 
     public sealed class ProfileApiConfig

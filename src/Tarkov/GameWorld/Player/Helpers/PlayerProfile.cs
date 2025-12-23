@@ -26,18 +26,37 @@ SOFTWARE.
  *
 */
 
-using LoneEftDmaRadar.Web.ProfileApi.Schema;
+using LoneEftDmaRadar.Web.ProfileApi;
 using LoneEftDmaRadar.Web.Twitch;
+using System.Collections.Frozen;
 
 namespace LoneEftDmaRadar.Tarkov.GameWorld.Player.Helpers
 {
-    public sealed class PlayerProfile : INotifyPropertyChanged
+    public sealed class PlayerProfile
     {
-        private readonly ObservedPlayer _player;
-        public event PropertyChangedEventHandler PropertyChanged;
-        private void OnPropertyChanged(string name) =>
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        private static readonly FrozenDictionary<string, HighAchiev> _highAchievements = new Dictionary<string, HighAchiev>(StringComparer.OrdinalIgnoreCase)
+        {
+            /// Very hard tasks, only veterans will have these (1k+ hrs)
+            ["68d3ff840531ed76e808866c"] = new("No Limit to Perfection", 2),    // Prestige 6
+            ["68d3fe84757f8967ec09099b"] = new("Five Plus", 2),                 // Prestige 5
+            ["68e8f02ff3a1196d1a05f2cb"] = new("Survivor", 2),                  // Escaped From Tarkov
+            ["68e8f042b8efa2bbeb009d89"] = new("Fallen", 2),                    // Escaped From Tarkov
+            ["68e8f04eb841bc8ac305350a"] = new("Debtor", 2),                    // Escaped From Tarkov
+            ["68e8f0575eb7e5ce5000ba0a"] = new("Savior", 2),                    // Escaped From Tarkov
+            ["6529097eccf6aa5f8737b3d0"] = new("Snowball", 2),
+            ["6514143d59647d2cb3213c93"] = new("Master of ULTRA", 2),
+            ["6514174fb1c08b0feb216d73"] = new("Chris's Heir", 2),
+            /// Hard-ish tasks but do-able for dedicated players
+            ["6514184ec31fcb0e163577d2"] = new("Killer7", 1),
+            ["676091c0f457869a94017a23"] = new("Prestigious", 1),
+            ["6514321bec10ff011f17ccac"] = new("Firefly", 1),
+            ["651415feb49e3253755f4b68"] = new("Long Live The King!", 1),
+            ["664f1f8768508d74604bf556"] = new("The Kappa Path", 1)
+        }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
+        private readonly ObservedPlayer _player;
+
+        public bool IsStandard => !IsEOD && !IsUnheard;
         public bool IsEOD => MemberCategory is Enums.EMemberCategory mc && (mc & Enums.EMemberCategory.UniqueId) == Enums.EMemberCategory.UniqueId;
         public bool IsUnheard => MemberCategory is Enums.EMemberCategory mc && (mc & Enums.EMemberCategory.Unheard) == Enums.EMemberCategory.Unheard;
 
@@ -87,17 +106,19 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player.Helpers
                 : SurvivedCount.GetValueOrDefault() / (float)rc * 100f;
 
             // --- Hours Played ---
-            var totalTime = Data?.PmcStats?.Counters?.TotalInGameTime;
-            if (totalTime.HasValue && totalTime.Value > 0)
-                Hours = (int)Math.Round(totalTime.Value / 3600f);
+            if (Data?.PmcStats?.Counters?.TotalInGameTime is int totalTime)
+            {
+                Hours = (int)Math.Round(totalTime / 3600f); // Seconds to hours
+            }
 
             // --- Level ---
-            var xp = Data?.Info?.Experience;
-            if (xp.HasValue)
+            if (Data?.Info?.Experience is int xp)
+            {
                 Level = TarkovDataManager.XPTable
-                    .Where(x => x.Key > xp.Value)
+                    .Where(x => x.Key > xp)
                     .Select(x => x.Value)
                     .FirstOrDefault() - 1;
+            }
 
             // --- Member Category ---
             var info = Data?.Info;
@@ -105,13 +126,37 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player.Helpers
                 MemberCategory = (Enums.EMemberCategory)info.MemberCategory;
 
             // --- Account Type ("UH", "EOD", or "--") ---
-            var mc = MemberCategory ?? Enums.EMemberCategory.Default;
             if (IsUnheard)
                 Acct = "UH";
             else if (IsEOD)
                 Acct = "EOD";
             else
                 Acct = "--";
+
+            // --- Achievement Level ---
+            int achievLevel = 0;
+            var highAchievList = new List<string>();
+            if (Data?.Achievements is Dictionary<string, long> playerAchievs && playerAchievs.Count > 0)
+            {
+                foreach (var kvp in _highAchievements)
+                {
+                    if (playerAchievs.ContainsKey(kvp.Key))
+                    {
+                        if (kvp.Value.Level > achievLevel)
+                            achievLevel = kvp.Value.Level;
+
+                        string prefix = kvp.Value.Level switch
+                        {
+                            2 => "++",
+                            1 => "+",
+                            _ => ""
+                        };
+                        highAchievList.Add($"{prefix}{kvp.Value.Name}");
+                    }
+                }
+            }
+            AchievLevel = achievLevel;
+            HighAchievs = highAchievList;
         }
 
         /// <summary>
@@ -122,29 +167,39 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player.Helpers
         {
             if (_player.Type is not PlayerType.PMC or PlayerType.PScav)
                 return;
-            if (Overall_KD is float kd && kd >= 15f) // Excessive KD (or they are just really good and we should watch them anyway!)
+            float kd = Overall_KD ?? 5f; // Default to average KD
+            int hrs = Hours ?? 0;
+            float sr = SurvivedRate ?? 50f; // Default to average survival rate
+            int achievLevel = AchievLevel;
+            if (kd >= 15f) // Excessive KD (or they are just really good and we should watch them anyway!)
             {
                 _player.IsFocused = true;
             }
-            else if (Hours is int hrs && hrs < 30 &&
-                    !IsEOD && !IsUnheard) // Low hours played on std account, could be a brand new cheater account
+            else if (hrs < 30 && IsStandard) // Low hrs played on std account, could be a brand new cheater account
             {
                 _player.IsFocused = true;
             }
-            else if (SurvivedRate is float sr && sr >= 65f) // Very high survival rate
+            else if (sr >= 65f) // Very high survival rate
             {
                 _player.IsFocused = true;
             }
-            else if (Overall_KD is float kd2 && kd2 >= 10f && SurvivedRate is float sr2 && sr2 < 35f) // Possible KD Dropping
+            else if (kd >= 10f && sr < 35f) // Possible KD Dropping
             {
                 _player.IsFocused = true;
             }
-            else if (Hours is int hrs2 && hrs2 >= 1000 && SurvivedRate is float sr3 && sr3 < 25f) // Possible KD Dropping
+            else if (hrs >= 1000 && sr < 25f) // Possible KD Dropping
+            {
+                _player.IsFocused = true;
+            }
+            else if (achievLevel >= 2 && hrs < 1000) // Very High achievement level but not enough hrs to have legitimately earned them
+            {
+                _player.IsFocused = true;
+            }
+            else if (achievLevel >= 1 && hrs < 100) // High achievement level but not enough hrs to have legitimately earned them
             {
                 _player.IsFocused = true;
             }
         }
-
 
         private void RefreshMemberCategory(Enums.EMemberCategory memberCategory)
         {
@@ -170,7 +225,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player.Helpers
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"ERROR updating Member Category for '{Name}': {ex}");
+                Logging.WriteLine($"ERROR updating Member Category for '{Name}': {ex}");
             }
         }
 
@@ -191,8 +246,8 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player.Helpers
 
         #region Properties
 
-        private ProfileData _data;
-        public ProfileData Data
+        private ProfileApiTypes.ProfileData _data;
+        public ProfileApiTypes.ProfileData Data
         {
             get => _data;
             set
@@ -200,11 +255,8 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player.Helpers
                 if (_data == value) return;
                 _data = value;
                 RefreshProfile();
-                if (App.Config.UI.MarkSusPlayers)
-                {
+                if (Program.Config.UI.MarkSusPlayers)
                     FocusIfSus();
-                }
-                OnPropertyChanged(nameof(Data));
             }
         }
 
@@ -217,152 +269,22 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player.Helpers
                 if (_name == value) return;
                 _name = value;
                 if (_player.IsHuman)
-                {
                     _ = Task.Run(() => RunTwitchLookupAsync(value));
-                }
-                OnPropertyChanged(nameof(Name));
             }
         }
 
-        private PlayerType _type;
-        public PlayerType Type
-        {
-            get => _type;
-            set
-            {
-                if (_type == value) return;
-                _type = value;
-                OnPropertyChanged(nameof(Type));
-            }
-        }
-
-        private string _accountID;
-        public string AccountID
-        {
-            get => _accountID;
-            private set
-            {
-                if (_accountID == value) return;
-                _accountID = value;
-                OnPropertyChanged(nameof(AccountID));
-            }
-        }
-
-        private int _groupID = -1;
-        public int GroupID
-        {
-            get => _groupID;
-            set
-            {
-                if (_groupID == value) return;
-                _groupID = value;
-                OnPropertyChanged(nameof(GroupID));
-            }
-        }
-
-        private Enums.EPlayerSide _playerSide;
-        public Enums.EPlayerSide PlayerSide
-        {
-            get => _playerSide;
-            set
-            {
-                if (_playerSide == value) return;
-                _playerSide = value;
-                OnPropertyChanged(nameof(PlayerSide));
-            }
-        }
-
-        private string _alerts;
-        public string Alerts
-        {
-            get => _alerts;
-            set
-            {
-                if (_alerts == value) return;
-                _alerts = value;
-                OnPropertyChanged(nameof(Alerts));
-            }
-        }
-
-        private string _twitchChannelURL;
-        public string TwitchChannelURL
-        {
-            get => _twitchChannelURL;
-            set
-            {
-                if (_twitchChannelURL == value) return;
-                _twitchChannelURL = value;
-                OnPropertyChanged(nameof(TwitchChannelURL));
-            }
-        }
-
-        private float? _overallKD;
-        public float? Overall_KD
-        {
-            get => _overallKD;
-            private set
-            {
-                if (_overallKD == value) return;
-                _overallKD = value;
-                OnPropertyChanged(nameof(Overall_KD));
-            }
-        }
-
-        private int? _raidCount;
-        public int? RaidCount
-        {
-            get => _raidCount;
-            private set
-            {
-                if (_raidCount == value) return;
-                _raidCount = value;
-                OnPropertyChanged(nameof(RaidCount));
-            }
-        }
-
-        // SurvivedCount is internal—no public getter—but we need its backing field & setter
-        private int? _survivedCount;
-        private int? SurvivedCount
-        {
-            get => _survivedCount;
-            set => _survivedCount = value;
-        }
-
-        private float? _survivedRate;
-        public float? SurvivedRate
-        {
-            get => _survivedRate;
-            private set
-            {
-                if (_survivedRate == value) return;
-                _survivedRate = value;
-                OnPropertyChanged(nameof(SurvivedRate));
-            }
-        }
-
-        private int? _hours;
-        public int? Hours
-        {
-            get => _hours;
-            private set
-            {
-                if (_hours == value) return;
-                _hours = value;
-                OnPropertyChanged(nameof(Hours));
-            }
-        }
-
-        private int? _level;
-        public int? Level
-        {
-            get => _level;
-            private set
-            {
-                if (_level == value) return;
-                _level = value;
-                OnPropertyChanged(nameof(Level));
-            }
-        }
+        public PlayerType Type { get; set; }
+        public string AccountID { get; private set; }
+        public int GroupID { get; set; } = -1;
+        public Enums.EPlayerSide PlayerSide { get; set; }
+        public string Alerts { get; set; }
+        public string TwitchChannelURL { get; set; }
+        public float? Overall_KD { get; private set; }
+        public int? RaidCount { get; private set; }
+        private int? SurvivedCount { get; set; }
+        public float? SurvivedRate { get; private set; }
+        public int? Hours { get; private set; }
+        public int? Level { get; private set; }
 
         private Enums.EMemberCategory? _memberCategory;
         public Enums.EMemberCategory? MemberCategory
@@ -375,22 +297,20 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player.Helpers
                 {
                     _memberCategory = cat;
                     RefreshMemberCategory(cat);
-                    OnPropertyChanged(nameof(MemberCategory));
                 }
             }
         }
 
-        private string _acct = "--";
-        public string Acct
-        {
-            get => _acct;
-            private set
-            {
-                if (_acct == value) return;
-                _acct = value;
-                OnPropertyChanged(nameof(Acct));
-            }
-        }
+        public string Acct { get; private set; } = "--";
+        public int AchievLevel { get; set; }
+        public IReadOnlyList<string> HighAchievs { get; private set; }
+
+        /// <summary>
+        /// A representation of a high-level achievement.
+        /// </summary>
+        /// <param name="Name">Achievement name.</param>
+        /// <param name="Level">Achievement level.</param>
+        private record HighAchiev(string Name, int Level);
 
         #endregion
     }

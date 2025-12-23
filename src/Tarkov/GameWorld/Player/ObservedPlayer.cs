@@ -30,9 +30,8 @@ using LoneEftDmaRadar.Misc.Services;
 using LoneEftDmaRadar.Tarkov.GameWorld.Player.Helpers;
 using LoneEftDmaRadar.Tarkov.Unity.Collections;
 using LoneEftDmaRadar.Tarkov.Unity.Structures;
-using LoneEftDmaRadar.UI.Radar.ViewModels;
+using LoneEftDmaRadar.UI.Panels;
 using LoneEftDmaRadar.Web.ProfileApi;
-using LoneEftDmaRadar.Web.ProfileApi.Schema;
 using VmmSharpEx.Scatter;
 
 namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
@@ -44,7 +43,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
         /// </summary>
         public PlayerProfile Profile { get; }
         /// <summary>
-        /// Player's Current Items.
+        /// Player's Current TarkovDevItems.
         /// </summary>
         public PlayerEquipment Equipment { get; }
         /// <summary>
@@ -228,7 +227,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
                     {
                         var profileData = dto.ToProfileData();
                         Profile.Data = profileData;
-                        Debug.WriteLine($"[ObservedPlayer] Got Profile (Cached) '{acctIdLong}'!");
+                        Logging.WriteLine($"[ObservedPlayer] Got Profile (Cached) '{acctIdLong}'!");
                     }
                     catch
                     {
@@ -240,12 +239,13 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
                 {
                     EFTProfileService.RegisterProfile(Profile);
                 }
-                PlayerHistoryViewModel.Add(this); /// Log To Player History
+                PlayerHistoryPanel.AddToPlayerHistory(this); /// Log To Player History
             }
             if (IsHumanHostile) /// Special Players Check on Hostiles Only
             {
-                if (MainWindow.Instance?.PlayerWatchlist?.ViewModel is PlayerWatchlistViewModel vm &&
-                    vm.Watchlist.TryGetValue(AccountID, out var watchlistEntry)) // player is on watchlist
+                var watchlist = Program.Config.PlayerWatchlist;
+                var watchlistEntry = watchlist?.FirstOrDefault(e => e.AcctID == AccountID);
+                if (watchlistEntry is not null) // player is on watchlist
                 {
                     Type = PlayerType.SpecialPlayer; // Flag watchlist player
                     UpdateAlerts($"[Watchlist] {watchlistEntry.Reason} @ {watchlistEntry.Timestamp}");
@@ -325,7 +325,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"ERROR updating Health Status for '{Name}': {ex}");
+                Logging.WriteLine($"ERROR updating Health Status for '{Name}': {ex}");
             }
         }
 

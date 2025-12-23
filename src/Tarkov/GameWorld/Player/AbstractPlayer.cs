@@ -32,10 +32,9 @@ using LoneEftDmaRadar.Tarkov.GameWorld.Loot;
 using LoneEftDmaRadar.Tarkov.GameWorld.Player.Helpers;
 using LoneEftDmaRadar.Tarkov.Unity;
 using LoneEftDmaRadar.Tarkov.Unity.Structures;
-using LoneEftDmaRadar.UI.Radar.Maps;
-using LoneEftDmaRadar.UI.Radar.ViewModels;
+using LoneEftDmaRadar.UI;
+using LoneEftDmaRadar.UI.Maps;
 using LoneEftDmaRadar.UI.Skia;
-using LoneEftDmaRadar.Web.TarkovDev.Data;
 using System.Collections.Frozen;
 using VmmSharpEx.Scatter;
 using static LoneEftDmaRadar.Tarkov.Unity.Structures.UnityTransform;
@@ -131,7 +130,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"ERROR during Player Allocation for player @ 0x{playerBase.ToString("X")}: {ex}");
+                Logging.WriteLine($"ERROR during Player Allocation for player @ 0x{playerBase.ToString("X")}: {ex}");
             }
         }
 
@@ -145,7 +144,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
                 player = new ClientPlayer(playerBase);
             else
                 player = new ObservedPlayer(playerBase);
-            Debug.WriteLine($"Player '{player.Name}' allocated.");
+            Logging.WriteLine($"Player '{player.Name}' allocated.");
             return player;
         }
 
@@ -485,7 +484,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
                             }
                             catch (Exception ex) // Attempt to re-allocate Transform on error
                             {
-                                Debug.WriteLine($"ERROR getting Player '{Name}' SkeletonRoot Position: {ex}");
+                                Logging.WriteLine($"ERROR getting Player '{Name}' SkeletonRoot Position: {ex}");
                                 var transform = new UnityTransform(SkeletonRoot.TransformInternal);
                                 SkeletonRoot = transform;
                             }
@@ -520,7 +519,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
                         {
                             if (SkeletonRoot.VerticesAddr != verticesPtr) // check if any addr changed
                             {
-                                Debug.WriteLine($"WARNING - SkeletonRoot Transform has changed for Player '{Name}'");
+                                Logging.WriteLine($"WARNING - SkeletonRoot Transform has changed for Player '{Name}'");
                                 var transform = new UnityTransform(SkeletonRoot.TransformInternal);
                                 SkeletonRoot = transform;
                             }
@@ -588,7 +587,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
         {
             if (_aiRoles.TryGetValue(voiceLine, out var role))
                 return role;
-            
+
             // Fallback pattern matching
             return voiceLine switch
             {
@@ -610,9 +609,6 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
         public virtual ref readonly Vector3 Position => ref SkeletonRoot.Position;
         public Vector2 MouseoverPosition { get; set; }
 
-        [ThreadStatic]
-        private static StringBuilder _drawStringBuilder;
-
         private ValueTuple<SKPaint, SKPaint> _paints;
         public void Draw(SKCanvas canvas, EftMapParams mapParams, LocalPlayer localPlayer)
         {
@@ -620,56 +616,54 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
             {
                 var point = Position.ToMapPos(mapParams.Map).ToZoomedPos(mapParams);
                 MouseoverPosition = new Vector2(point.X, point.Y);
-                if (!IsAlive)
+                if (!IsAlive) // Player Dead -- Draw 'X' death marker and move on
                 {
                     DrawDeathMarker(canvas, point);
-                    return;
-                }
-                _paints = GetPaints();
-                
-                DrawPlayerPill(canvas, localPlayer, point);
-                if (this == localPlayer)
-                    return;
-                    
-                var height = Position.Y - localPlayer.Position.Y;
-                var dist = Vector3.Distance(localPlayer.Position, Position);
-                
-                _drawStringBuilder ??= new StringBuilder(64);
-                _drawStringBuilder.Clear();
-                
-                using var lines = new PooledList<string>(2);
-                if (!App.Config.UI.HideNames)
-                {
-                    string name = IsError ? "ERROR" : Name;
-                    if (this is ObservedPlayer observed)
-                    {
-                        if (observed.Profile?.Level is int levelResult)
-                            _drawStringBuilder.Append('L').Append(levelResult).Append(':');
-                        _drawStringBuilder.Append(name);
-                        if (observed.HealthStatus is not Enums.ETagStatus.Healthy)
-                            _drawStringBuilder.Append(" (").Append(observed.HealthStatus).Append(')');
-                    }
-                    else
-                    {
-                        _drawStringBuilder.Append(name);
-                    }
-                    lines.Add(_drawStringBuilder.ToString());
-                    _drawStringBuilder.Clear();
-                    _drawStringBuilder.Append("H: ").AppendFormat("{0:n0}", height)
-                                      .Append(" D: ").AppendFormat("{0:n0}", dist);
-                    lines.Add(_drawStringBuilder.ToString());
                 }
                 else
                 {
-                    _drawStringBuilder.AppendFormat("{0:n0}", height).Append(',').AppendFormat("{0:n0}", dist);
-                    lines.Add(IsError ? "ERROR" : _drawStringBuilder.ToString());
-                }
+                    _paints = GetPaints();
+                    DrawPlayerPill(canvas, localPlayer, point);
+                    if (this == localPlayer)
+                        return;
+                    var height = Position.Y - localPlayer.Position.Y;
+                    var dist = Vector3.Distance(localPlayer.Position, Position);
+                    using var lines = new PooledList<string>();
+                    var observed = this as ObservedPlayer;
+                    string important = (observed is not null && observed.Equipment.CarryingImportantLoot) ?
+                        "!!" : null; // Flag important loot
+                    if (!Program.Config.UI.HideNames) // show full names & info
+                    {
+                        string name = null;
+                        if (IsError)
+                            name = "ERROR"; // In case POS stops updating, let us know!
+                        else
+                            name = Name;
+                        string health = null; string level = null;
+                        if (observed is not null)
+                        {
+                            health = observed.HealthStatus is Enums.ETagStatus.Healthy
+                                ? null
+                                : $" ({observed.HealthStatus})"; // Only display abnormal health status
+                            if (observed.Profile?.Level is int levelResult)
+                                level = $"L{levelResult}:";
+                        }
+                        lines.Add($"{important}{level}{name}{health}");
+                        lines.Add($"H: {height:n0} D: {dist:n0}");
+                    }
+                    else // just height, distance
+                    {
+                        lines.Add($"{important}{height:n0},{dist:n0}");
+                        if (IsError)
+                            lines[0] = "ERROR"; // In case POS stops updating, let us know!
+                    }
 
-                DrawPlayerText(canvas, point, lines);
+                    DrawPlayerText(canvas, point, lines);
+                }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"WARNING! Player Draw Error: {ex}");
+                Logging.WriteLine($"WARNING! Player Draw Error: {ex}");
             }
         }
 
@@ -678,10 +672,10 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
         /// </summary>
         private void DrawPlayerPill(SKCanvas canvas, LocalPlayer localPlayer, SKPoint point)
         {
-            if (this != localPlayer && RadarViewModel.MouseoverGroup is int grp && grp == GroupID)
+            if (this != localPlayer && RadarWindow.MouseoverGroup is int grp && grp == GroupID)
                 _paints.Item1 = SKPaints.PaintMouseoverGroup;
 
-            float scale = 1.65f * App.Config.UI.UIScale;
+            float scale = 1.65f * Program.Config.UI.UIScale;
 
             canvas.Save();
             canvas.Translate(point.X, point.Y);
@@ -693,11 +687,11 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
             canvas.DrawPath(_playerPill, SKPaints.ShapeOutline); // outline
             canvas.DrawPath(_playerPill, _paints.Item1);
 
-            var aimlineLength = this == localPlayer || (IsFriendly && App.Config.UI.TeammateAimlines) ?
-                App.Config.UI.AimLineLength : 0;
+            var aimlineLength = this == localPlayer || (IsFriendly && Program.Config.UI.TeammateAimlines) ?
+                Program.Config.UI.AimLineLength : 0;
             if (!IsFriendly &&
-                !(IsAI && !App.Config.UI.AIAimlines) &&
-                this.IsFacingTarget(localPlayer, App.Config.UI.MaxDistance)) // Hostile Player, check if aiming at a friendly (High Alert)
+                !(IsAI && !Program.Config.UI.AIAimlines) &&
+                this.IsFacingTarget(localPlayer, Program.Config.UI.MaxDistance)) // Hostile Player, check if aiming at a friendly (High Alert)
                 aimlineLength = 9999;
 
             if (aimlineLength > 0)
@@ -715,7 +709,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
         /// </summary>
         private static void DrawDeathMarker(SKCanvas canvas, SKPoint point)
         {
-            float scale = App.Config.UI.UIScale;
+            float scale = Program.Config.UI.UIScale;
 
             canvas.Save();
             canvas.Translate(point.X, point.Y);
@@ -729,9 +723,9 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
         /// </summary>
         private void DrawPlayerText(SKCanvas canvas, SKPoint point, IList<string> lines)
         {
-            if (RadarViewModel.MouseoverGroup is int grp && grp == GroupID)
+            if (RadarWindow.MouseoverGroup is int grp && grp == GroupID)
                 _paints.Item2 = SKPaints.TextMouseoverGroup;
-            point.Offset(9.5f * App.Config.UI.UIScale, 0);
+            point.Offset(9.5f * Program.Config.UI.UIScale, 0);
             foreach (var line in lines)
             {
                 if (string.IsNullOrEmpty(line?.Trim()))
@@ -774,61 +768,59 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
             }
         }
 
-        [ThreadStatic]
-        private static StringBuilder _mouseoverStringBuilder;
-
         public void DrawMouseover(SKCanvas canvas, EftMapParams mapParams, LocalPlayer localPlayer)
         {
             if (this == localPlayer)
                 return;
-            
-            _mouseoverStringBuilder ??= new StringBuilder(128);
-            using var lines = new PooledList<string>(8);
-            
-            var name = App.Config.UI.HideNames && IsHuman ? "<Hidden>" : Name;
+            using var lines = new PooledList<string>();
+            var name = Program.Config.UI.HideNames && IsHuman ? "<Hidden>" : Name;
+            string health = null;
             var obs = this as ObservedPlayer;
-            
-            if (obs?.IsStreaming == true)
+            if (obs is not null)
+                health = obs.HealthStatus is Enums.ETagStatus.Healthy
+                    ? null
+                    : $" ({obs.HealthStatus.ToString()})"; // Only display abnormal health status
+            if (obs is not null && obs.IsStreaming) // Streamer Notice
                 lines.Add("[LIVE TTV - Double Click]");
-                
-            if (Alerts?.Trim() is string alert && alert.Length > 0)
+            string alert = Alerts?.Trim();
+            if (!string.IsNullOrEmpty(alert)) // Special Players,etc.
                 lines.Add(alert);
-                
-            if (IsHostileActive)
+            if (IsHostileActive) // Enemy Players, display information
             {
-                _mouseoverStringBuilder.Clear();
-                _mouseoverStringBuilder.Append(name);
-                if (obs?.HealthStatus is Enums.ETagStatus status && status != Enums.ETagStatus.Healthy)
-                    _mouseoverStringBuilder.Append(" (").Append(status).Append(')');
-                _mouseoverStringBuilder.Append(' ').Append(AccountID);
-                lines.Add(_mouseoverStringBuilder.ToString().Trim());
-                
-                _mouseoverStringBuilder.Clear();
-                _mouseoverStringBuilder.Append(PlayerSide.ToString());
+                lines.Add($"{name}{health} {AccountID}");
+                var faction = PlayerSide.ToString();
+                string g = null;
                 if (GroupID != -1)
-                    _mouseoverStringBuilder.Append(" G:").Append(GroupID).Append(' ');
-                lines.Add(_mouseoverStringBuilder.ToString());
+                    g = $" G:{GroupID} ";
+                lines.Add($"{faction}{g}");
+                // Check Achievs
+                if (obs?.Profile?.HighAchievs is IReadOnlyList<string> highAchievs)
+                {
+                    foreach (var ach in highAchievs)
+                        lines.Add(ach);
+                }
             }
             else if (!IsAlive)
             {
-                lines.Add($"{Type}:{name}");
+                lines.Add($"{Type.ToString()}:{name}");
+                string g = null;
                 if (GroupID != -1)
-                    lines.Add($"G:{GroupID} ");
+                    g = $"G:{GroupID} ";
+                if (g is not null) lines.Add(g);
             }
             else if (IsAIActive)
             {
                 lines.Add(name);
             }
-            
-            if (obs?.Equipment.Items is IReadOnlyDictionary<string, TarkovMarketItem> equipment)
+            if (obs is not null)
             {
+                // This is outside of the previous conditionals to always show equipment even if they're dead,etc.
                 lines.Add($"Value: {Utilities.FormatNumberKM(obs.Equipment.Value)}");
-                foreach (var item in equipment.OrderBy(e => e.Key))
+                foreach (var item in obs.Equipment.Items.OrderBy(e => e.Key))
                 {
-                    _mouseoverStringBuilder.Clear();
-                    _mouseoverStringBuilder.Append(item.Key.AsSpan(0, Math.Min(5, item.Key.Length)));
-                    _mouseoverStringBuilder.Append(": ").Append(item.Value.ShortName);
-                    lines.Add(_mouseoverStringBuilder.ToString());
+                    string important = item.Value.IsImportant ?
+                        "!!" : null; // Flag important loot
+                    lines.Add($"{important}{item.Key.Substring(0, 5)}: {item.Value.ShortName}");
                 }
             }
 

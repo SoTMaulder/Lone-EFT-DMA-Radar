@@ -26,6 +26,7 @@ SOFTWARE.
  *
 */
 
+using LoneEftDmaRadar.UI;
 using System.Runtime;
 
 namespace LoneEftDmaRadar.Misc
@@ -60,7 +61,7 @@ namespace LoneEftDmaRadar.Misc
                     var info = new MEMORYSTATUSEX();
                     if (GlobalMemoryStatusEx(ref info) && info.dwMemoryLoad >= 92) // Over 92% memory usage
                     {
-                        Debug.WriteLine("[ResourceJanitor] High Memory Load, running cleanup...");
+                        Logging.WriteLine("[ResourceJanitor] High Memory Load, running cleanup...");
                         Run(false);
                     }
                 }
@@ -70,7 +71,9 @@ namespace LoneEftDmaRadar.Misc
         }
 
         /// <summary>
-        /// Runs resource cleanup on the app.
+        /// Runs resource cleanup on the Program.
+        /// NOTE: This is called from background threads, so we cannot perform GPU operations here.
+        /// GPU resource purging must be done on the render thread.
         /// </summary>
         public static void Run(bool aggressive = true)
         {
@@ -78,7 +81,7 @@ namespace LoneEftDmaRadar.Misc
             {
                 try
                 {
-                    MainWindow.Instance?.Radar?.ViewModel?.PurgeSKResources();
+                    RadarWindow.PurgeSKResources();
                     if (aggressive)
                     {
                         GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
@@ -99,7 +102,7 @@ namespace LoneEftDmaRadar.Misc
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"ResourceJanitor ERROR: {ex}");
+                    Logging.WriteLine($"ResourceJanitor ERROR: {ex}");
                 }
             }
         }

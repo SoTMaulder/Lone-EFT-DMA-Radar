@@ -72,7 +72,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
         {
             try
             {
-                if (App.Config.AimviewWidget.Enabled)
+                if (Program.Config.AimviewWidget.Enabled)
                 {
                     _lookRaycastTransform ??= new UnityTransform(
                         transformInternal: Memory.ReadPtrChain(Memory.ReadPtr(this + Offsets.Player._playerLookRaycastTransform), true, 0x10),
@@ -115,7 +115,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
         {
             try
             {
-                if (App.Config.AimviewWidget.Enabled && _lookRaycastTransform is UnityTransform existing)
+                if (Program.Config.AimviewWidget.Enabled && _lookRaycastTransform is UnityTransform existing)
                 {
                     round1.PrepareReadPtr(existing.TransformInternal + UnitySDK.UnityOffsets.TransformAccess_HierarchyOffset); // Transform Hierarchy
                     round1.Completed += (sender, s1) =>
@@ -129,7 +129,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
                                 {
                                     if (existing.VerticesAddr != verticesPtr) // check if any addr changed
                                     {
-                                        Debug.WriteLine($"WARNING - '_lookRaycastTransform' Transform has changed for LocalPlayer '{Name}'");
+                                        Logging.WriteLine($"WARNING - '_lookRaycastTransform' Transform has changed for LocalPlayer '{Name}'");
                                         var transform = new UnityTransform(existing.TransformInternal);
                                         _lookRaycastTransform = transform;
                                     }
@@ -148,7 +148,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
         #region Wishlist
 
         /// <summary>
-        /// All Items on the Player's WishList.
+        /// All TarkovDevItems on the Player's WishList.
         /// </summary>
         public static IReadOnlyDictionary<string, byte> WishlistItems => _wishlistItems;
         private static readonly ConcurrentDictionary<string, byte> _wishlistItems = new(StringComparer.OrdinalIgnoreCase);
@@ -163,12 +163,12 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
             {
                 if (!_wishlistRL.TryEnter())
                     return;
-                    
+
                 var wishlistManager = Memory.ReadPtr(Profile + Offsets.Profile.WishlistManager);
                 var itemsPtr = Memory.ReadPtr(wishlistManager + Offsets.WishlistManager._wishlistItems);
                 using var items = UnityDictionary<MongoID, int>.Create(itemsPtr);
                 using var newWishlist = new PooledSet<string>(items.Count, StringComparer.OrdinalIgnoreCase);
-                
+
                 foreach (var item in items)
                 {
                     ct.ThrowIfCancellationRequested();
@@ -178,13 +178,13 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
                     }
                     catch { }
                 }
-                
+
                 foreach (var existing in _wishlistItems.Keys)
                 {
                     if (!newWishlist.Contains(existing))
                         _wishlistItems.TryRemove(existing, out _);
                 }
-                
+
                 foreach (var newItem in newWishlist)
                 {
                     _wishlistItems.TryAdd(newItem, 0);
@@ -193,7 +193,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Player
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[Wishlist] ERROR Refreshing: {ex}");
+                Logging.WriteLine($"[Wishlist] ERROR Refreshing: {ex}");
             }
         }
 

@@ -27,10 +27,8 @@ SOFTWARE.
 */
 
 using LoneEftDmaRadar.Web.ProfileApi;
-using LoneEftDmaRadar.Web.ProfileApi.Schema;
 using Microsoft.Extensions.DependencyInjection;
 using Polly.CircuitBreaker;
-using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Security.Authentication;
 
@@ -72,22 +70,22 @@ namespace LoneEftDmaRadar.Web.TarkovDev.Profiles
                 options.CircuitBreaker.StateProvider = _circuitBreakerStateProvider;
                 options.CircuitBreaker.SamplingDuration = options.AttemptTimeout.Timeout * 2;
                 options.CircuitBreaker.FailureRatio = 1.0;
-                options.CircuitBreaker.MinimumThroughput = 2;
+                options.CircuitBreaker.MinimumThroughput = options.Retry.MaxRetryAttempts * 3;
                 options.CircuitBreaker.BreakDuration = TimeSpan.FromMinutes(1);
             });
         }
 
         private readonly ConcurrentDictionary<string, byte> _skip = new(StringComparer.OrdinalIgnoreCase);
 
-        public uint Priority { get; } = App.Config.ProfileApi.TarkovDev.Priority;
+        public uint Priority { get; } = Program.Config.ProfileApi.TarkovDev.Priority;
 
-        public bool IsEnabled { get; } = App.Config.ProfileApi.TarkovDev.Enabled;
+        public bool IsEnabled { get; } = Program.Config.ProfileApi.TarkovDev.Enabled;
 
-        public bool CanRun => _circuitBreakerStateProvider.CircuitState == CircuitState.Closed; // true
+        public bool CanRun { get; } = true;
 
         private TarkovDevProfileProvider() { }
 
-        public bool CanLookup(string accountId) => !_skip.ContainsKey(accountId);
+        public bool CanLookup(string accountId) => _circuitBreakerStateProvider.CircuitState == CircuitState.Closed && !_skip.ContainsKey(accountId);
 
         public async Task<EFTProfileResponse> GetProfileAsync(string accountId, CancellationToken ct)
         {
@@ -97,29 +95,33 @@ namespace LoneEftDmaRadar.Web.TarkovDev.Profiles
                 {
                     return null;
                 }
-                var client = App.HttpClientFactory.CreateClient(nameof(TarkovDevProfileProvider));
+                var client = Program.HttpClientFactory.CreateClient(nameof(TarkovDevProfileProvider));
                 using var response = await client.GetAsync($"profile/{accountId}.json", ct);
-                if (response.StatusCode is HttpStatusCode.NotFound)
+                string content = await response.Content.ReadAsStringAsync(ct);
+                if (!response.IsSuccessStatusCode) // Handle errors
                 {
-                    _skip.TryAdd(accountId, 0);
+                    if (response.StatusCode is HttpStatusCode.NotFound)
+                    {
+                        _skip.TryAdd(accountId, 0);
+                    }
+                    Logging.WriteLine($"[TarkovDevProvider] Failed to get Profile '{accountId}': [{response.StatusCode}] '{content}'");
+                    return null;
                 }
-                response.EnsureSuccessStatusCode();
-                string json = await response.Content.ReadAsStringAsync(ct);
-                using var jsonDoc = JsonDocument.Parse(json);
+                using var jsonDoc = JsonDocument.Parse(content);
                 long epoch = jsonDoc.RootElement.GetProperty("updated").GetInt64();
-                var result = JsonSerializer.Deserialize<ProfileData>(json, App.JsonOptions) ??
+                var result = JsonSerializer.Deserialize<ProfileApiTypes.ProfileData>(content, Program.JsonOptions) ??
                     throw new InvalidOperationException("Failed to deserialize response");
-                Debug.WriteLine($"[TarkovDevProvider] Got Profile '{accountId}'!");
+                Logging.WriteLine($"[TarkovDevProvider] Got Profile '{accountId}'!");
                 return new()
                 {
                     Data = result,
-                    Raw = json,
+                    Raw = content,
                     Updated = DateTimeOffset.FromUnixTimeMilliseconds(epoch)
                 };
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[TarkovDevProvider] Failed to get profile: {ex}");
+                Logging.WriteLine($"[TarkovDevProvider] Unhandled Exception: {ex}");
                 return null;
             }
         }

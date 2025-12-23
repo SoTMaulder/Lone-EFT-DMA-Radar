@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Lone EFT DMA Radar
  * Brought to you by Lone (Lone DMA)
  * 
@@ -53,7 +53,7 @@ namespace LoneEftDmaRadar.DMA
 
         private const string GAME_PROCESS_NAME = "EscapeFromTarkov.exe";
         internal const uint MAX_READ_SIZE = 0x1000u * 1500u;
-        private static readonly string _mmap = Path.Combine(App.ConfigPath.FullName, "mmap.txt");
+        private static readonly string _mmap = Path.Combine(Program.ConfigPath.FullName, "mmap.txt");
         private static Vmm _vmm;
         private static InputManager _input;
         private static uint _pid;
@@ -77,20 +77,27 @@ namespace LoneEftDmaRadar.DMA
         {
             await Task.Run(() =>
             {
-                FpgaAlgo fpgaAlgo = App.Config.DMA.FpgaAlgo;
-                bool useMemMap = App.Config.DMA.MemMapEnabled;
-                Debug.WriteLine("Initializing DMA...");
+                FpgaAlgo fpgaAlgo = Program.Config.DMA.FpgaAlgo;
+                bool useMemMap = Program.Config.DMA.MemMapEnabled;
+                Logging.WriteLine("Initializing DMA...");
                 /// Check MemProcFS Versions...
                 string vmmVersion = FileVersionInfo.GetVersionInfo("vmm.dll").FileVersion;
                 string lcVersion = FileVersionInfo.GetVersionInfo("leechcore.dll").FileVersion;
                 string versions = $"Vmm Version: {vmmVersion}\n" +
                     $"Leechcore Version: {lcVersion}";
-                string[] initArgs = new[] {
-                "-norefresh",
-                "-device",
-                fpgaAlgo is FpgaAlgo.Auto ?
-                    "fpga" : $"fpga://algo={(int)fpgaAlgo}",
-                "-waitinitialize"};
+                List<string> initArgs = new()
+                {
+                    "-norefresh",
+                    "-device",
+                    fpgaAlgo is FpgaAlgo.Auto ?
+                        "fpga" : $"fpga://algo={(int)fpgaAlgo}",
+                    "-waitinitialize"
+                };
+                if (Logging.UseConsole)
+                {
+                    initArgs.Add("-printf");
+                    initArgs.Add("-v");
+                }
                 try
                 {
                     /// Begin Init...
@@ -98,8 +105,8 @@ namespace LoneEftDmaRadar.DMA
                     {
                         if (!File.Exists(_mmap))
                         {
-                            Debug.WriteLine("[DMA] No MemMap, attempting to generate...");
-                            _vmm = new Vmm(args: initArgs)
+                            Logging.WriteLine("[DMA] No MemMap, attempting to generate...");
+                            _vmm = new Vmm(args: initArgs.ToArray())
                             {
                                 EnableMemoryWriting = false
                             };
@@ -109,11 +116,11 @@ namespace LoneEftDmaRadar.DMA
                         }
                         else
                         {
-                            var mapArgs = new[] { "-memmap", _mmap };
-                            initArgs = initArgs.Concat(mapArgs).ToArray();
+                            initArgs.Add("-memmap");
+                            initArgs.Add(_mmap);
                         }
                     }
-                    _vmm ??= new Vmm(args: initArgs)
+                    _vmm ??= new Vmm(args: initArgs.ToArray())
                     {
                         EnableMemoryWriting = false
                     };
@@ -128,10 +135,9 @@ namespace LoneEftDmaRadar.DMA
                     {
                         MessageBox.Show(
                             messageBoxText: $"WARNING: Failed to initialize InputManager (win32). Please note, this only works on Windows 11 (Game PC). Startup will continue without hotkeys.\n\n{ex}",
-                            caption: App.Name,
+                            caption: Program.Name,
                             button: MessageBoxButton.OK,
                             icon: MessageBoxImage.Warning,
-                            defaultResult: MessageBoxResult.OK,
                             options: MessageBoxOptions.DefaultDesktopOnly);
                     }
                     ProcessStopped += MemDMA_ProcessStopped;
@@ -141,7 +147,7 @@ namespace LoneEftDmaRadar.DMA
                     {
                         IsBackground = true
                     }.Start();
-                    Debug.WriteLine("DMA Initialized!");
+                    Logging.WriteLine("DMA Initialized!");
                 }
                 catch (Exception ex)
                 {
@@ -170,9 +176,7 @@ namespace LoneEftDmaRadar.DMA
         /// </summary>
         private static void MemoryPrimaryWorker()
         {
-            Debug.WriteLine("Memory thread starting...");
-            while (MainWindow.Instance is null)
-                Thread.Sleep(1);
+            Logging.WriteLine("Memory thread starting...");
             while (true)
             {
                 try
@@ -187,7 +191,7 @@ namespace LoneEftDmaRadar.DMA
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"FATAL ERROR on Memory Thread: {ex}");
+                    Logging.WriteLine($"FATAL ERROR on Memory Thread: {ex}");
                     OnProcessStopped();
                     Thread.Sleep(1000);
                 }
@@ -224,7 +228,7 @@ namespace LoneEftDmaRadar.DMA
         /// </summary>
         private static void RunStartupLoop()
         {
-            Debug.WriteLine("New Process Startup");
+            Logging.WriteLine("New Process Startup");
             while (true) // Startup loop
             {
                 try
@@ -236,12 +240,12 @@ namespace LoneEftDmaRadar.DMA
                     Starting = true;
                     OnProcessStarting();
                     Ready = true;
-                    Debug.WriteLine("Process Startup [OK]");
+                    Logging.WriteLine("Process Startup [OK]");
                     break;
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"Process Startup [FAIL]: {ex}");
+                    Logging.WriteLine($"Process Startup [FAIL]: {ex}");
                     OnProcessStopped();
                     Thread.Sleep(1000);
                 }
@@ -273,17 +277,17 @@ namespace LoneEftDmaRadar.DMA
                 }
                 catch (OperationCanceledException ex) // Restart Radar
                 {
-                    Debug.WriteLine(ex.Message);
+                    Logging.WriteLine(ex.Message);
                     continue;
                 }
                 catch (ProcessNotRunningException ex) // Process Closed
                 {
-                    Debug.WriteLine(ex.Message);
+                    Logging.WriteLine(ex.Message);
                     break;
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"Unhandled Exception in Game Loop: {ex}");
+                    Logging.WriteLine($"Unhandled Exception in Game Loop: {ex}");
                     break;
                 }
                 finally

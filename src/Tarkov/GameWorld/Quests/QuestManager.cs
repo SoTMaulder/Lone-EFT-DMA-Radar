@@ -1,9 +1,16 @@
 ﻿using Collections.Pooled;
 using LoneEftDmaRadar.Tarkov.Unity.Collections;
+using LoneEftDmaRadar.Web.TarkovDev.Data;
 using System.Collections.Frozen;
 
 namespace LoneEftDmaRadar.Tarkov.GameWorld.Quests
 {
+    /// <summary>
+    /// Quest Manager handles reading current quests and their conditions.
+    /// </summary>
+    /// <remarks>
+    /// Thanks to Keeegi for helping with the post 1.0 implementation!
+    /// </remarks>
     public sealed class QuestManager
     {
         private readonly ulong _profile;
@@ -72,9 +79,9 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Quests
                         _ = _quests.GetOrAdd(
                             qId,
                             id => new QuestEntry(id));
-                        if (App.Config.QuestHelper.BlacklistedQuests.ContainsKey(qId))
+                        if (Program.Config.QuestHelper.BlacklistedQuests.ContainsKey(qId))
                             continue; // Log the quest but dont get any conditions
-                        //Debug.WriteLine($"[QuestManager] Processing Quest ID: {task.Id} {task.Name}");
+                        //Logging.WriteLine($"[QuestManager] Processing Quest ID: {task.Id} {task.Name}");
                         using var completedHS = UnityHashSet<MongoID>.Create(Memory.ReadPtr(qDataEntry + Offsets.QuestsData.CompletedConditions), true);
                         using var completedConditions = new PooledSet<string>(StringComparer.OrdinalIgnoreCase);
                         foreach (var c in completedHS)
@@ -86,15 +93,15 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Quests
                         FilterConditions(task, qId, completedConditions, masterItems, masterLocations);
 
                         ////print masterItems and masterLocations for debugging
-                        //Debug.WriteLine($"[QuestManager] Master Items for Quest ID: {task.Id} {task.Name}");
+                        //Logging.WriteLine($"[QuestManager] Master TarkovDevItems for Quest ID: {task.Id} {task.Name}");
                         //foreach (var item in masterItems)
                         //{
-                        //    Debug.WriteLine($"[QuestManager]   Item ID: {item}");
+                        //    Logging.WriteLine($"[QuestManager]   Item ID: {item}");
                         //}
-                        //Debug.WriteLine($"[QuestManager] Master Locations for Quest ID: {task.Id} {task.Name}");
+                        //Logging.WriteLine($"[QuestManager] Master Locations for Quest ID: {task.Id} {task.Name}");
                         //foreach (var loc in masterLocations)
                         //{
-                        //    Debug.WriteLine($"[QuestManager]   Location Key: {loc}");
+                        //    Logging.WriteLine($"[QuestManager]   Location Key: {loc}");
                         //}
                     }
                     catch
@@ -102,7 +109,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Quests
 
                     }
                 }
-                // Remove stale Quests/Items/Locations
+                // Remove stale Quests/TarkovDevItems/Locations
                 foreach (var oldQuest in _quests)
                 {
                     if (!masterQuests.Contains(oldQuest.Key))
@@ -128,7 +135,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Quests
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[QuestManager] CRITICAL ERROR: {ex}");
+                Logging.WriteLine($"[QuestManager] CRITICAL ERROR: {ex}");
             }
         }
 
@@ -143,7 +150,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Quests
             QuestObjectiveType.GiveItem
         }.ToFrozenSet();
 
-        private void FilterConditions(TarkovDataManager.TaskElement task, string questId, PooledSet<string> completedConditions, PooledSet<string> masterItems, PooledSet<string> masterLocations)
+        private void FilterConditions(TarkovDevTypes.TaskElement task, string questId, PooledSet<string> completedConditions, PooledSet<string> masterItems, PooledSet<string> masterLocations)
         {
             if (task is null)
                 return;
@@ -210,7 +217,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Quests
                     //        {
                     //            // Make a stable key for this quest-objective-marker triple
                     //            var locKey = $"{questId}:{objective.Id}:{markerId}";
-                    //            Debug.WriteLine($"[QuestManager] Adding Marker Location Key: {locKey} for Quest ID: {task.Id} {task.Name}");
+                    //            Logging.WriteLine($"[QuestManager] Adding Marker Location Key: {locKey} for Quest ID: {task.Id} {task.Name}");
                     //            _locations.GetOrAdd(locKey, _ => new QuestLocation(questId, objective.Id, pos));
                     //            masterLocations.Add(locKey);
                     //        }
@@ -218,7 +225,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Quests
                     //}
                     else
                     {
-                        //Debug.WriteLine($"[QuestManager] Unhandled Objective Type: {objective.Type} in Quest ID: {task.Id} {task.Name}");
+                        //Logging.WriteLine($"[QuestManager] Unhandled Objective Type: {objective.Type} in Quest ID: {task.Id} {task.Name}");
                     }
 
                 }

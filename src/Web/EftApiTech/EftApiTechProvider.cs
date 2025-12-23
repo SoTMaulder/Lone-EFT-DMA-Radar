@@ -26,11 +26,10 @@ SOFTWARE.
  *
 */
 
+using LoneEftDmaRadar.UI;
 using LoneEftDmaRadar.Web.ProfileApi;
-using LoneEftDmaRadar.Web.ProfileApi.Schema;
 using Microsoft.Extensions.DependencyInjection;
 using Polly.CircuitBreaker;
-using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Security.Authentication;
 using System.Threading.RateLimiting;
@@ -53,7 +52,7 @@ namespace LoneEftDmaRadar.Web.EftApiTech
                 client.DefaultRequestHeaders.AcceptEncoding.Add(new StringWithQualityHeaderValue("gzip"));
                 client.DefaultRequestHeaders.AcceptEncoding.Add(new StringWithQualityHeaderValue("deflate"));
                 client.DefaultRequestHeaders.AcceptEncoding.Add(new StringWithQualityHeaderValue("identity"));
-                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", App.Config.ProfileApi.EftApiTech.ApiKey);
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Program.Config.ProfileApi.EftApiTech.ApiKey);
                 client.BaseAddress = new Uri("https://eft-api.tech/");
             })
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler()
@@ -73,8 +72,29 @@ namespace LoneEftDmaRadar.Web.EftApiTech
                 options.CircuitBreaker.StateProvider = _circuitBreakerStateProvider;
                 options.CircuitBreaker.SamplingDuration = options.AttemptTimeout.Timeout * 2;
                 options.CircuitBreaker.FailureRatio = 1.0;
-                options.CircuitBreaker.MinimumThroughput = 2;
+                options.CircuitBreaker.MinimumThroughput = Math.Min(options.Retry.MaxRetryAttempts * 3, Program.Config.ProfileApi.EftApiTech.RequestsPerMinute);
                 options.CircuitBreaker.BreakDuration = TimeSpan.FromMinutes(1);
+                var defaultHandler = options.CircuitBreaker.ShouldHandle;
+                options.CircuitBreaker.ShouldHandle = async args =>
+                {
+                    var statusCode = args.Outcome.Result?.StatusCode;
+                    if (statusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+                        return true;
+
+                    return await defaultHandler(args);
+                };
+                options.CircuitBreaker.OnOpened = args =>
+                {
+                    var statusCode = args.Outcome.Result?.StatusCode;
+                    var exception = args.Outcome.Exception;
+                    Logging.WriteLine($"[EftApiTechProvider] Circuit OPENED! StatusCode: {statusCode}, Exception: {exception?.GetType().Name}: {exception?.Message}");
+                    return ValueTask.CompletedTask;
+                };
+                options.CircuitBreaker.OnClosed = _ =>
+                {
+                    Logging.WriteLine("[EftApiTechProvider] Circuit CLOSED");
+                    return ValueTask.CompletedTask;
+                };
             });
         }
 
@@ -82,21 +102,21 @@ namespace LoneEftDmaRadar.Web.EftApiTech
         private readonly SlidingWindowRateLimiter _limiter = new(new SlidingWindowRateLimiterOptions()
         {
             AutoReplenishment = true,
-            PermitLimit = App.Config.ProfileApi.EftApiTech.RequestsPerMinute,
+            PermitLimit = Program.Config.ProfileApi.EftApiTech.RequestsPerMinute,
             QueueLimit = 0,
             Window = TimeSpan.FromMinutes(1),
             SegmentsPerWindow = 12
         });
 
-        public uint Priority { get; } = App.Config.ProfileApi.EftApiTech.Priority;
+        public uint Priority { get; } = Program.Config.ProfileApi.EftApiTech.Priority;
 
-        public bool IsEnabled { get; } = App.Config.ProfileApi.EftApiTech.Enabled;
+        public bool IsEnabled { get; } = Program.Config.ProfileApi.EftApiTech.Enabled;
 
-        public bool CanRun => _circuitBreakerStateProvider.CircuitState == CircuitState.Closed && (_limiter.GetStatistics()?.CurrentAvailablePermits ?? 0) > 0;
+        public bool CanRun => (_limiter.GetStatistics()?.CurrentAvailablePermits ?? 0) > 0;
 
         private EftApiTechProvider() { }
 
-        public bool CanLookup(string accountId) => !_skip.ContainsKey(accountId);
+        public bool CanLookup(string accountId) => _circuitBreakerStateProvider.CircuitState == CircuitState.Closed && !_skip.ContainsKey(accountId);
 
         public async Task<EFTProfileResponse> GetProfileAsync(string accountId, CancellationToken ct)
         {
@@ -109,28 +129,29 @@ namespace LoneEftDmaRadar.Web.EftApiTech
                 using var lease = await _limiter.AcquireAsync(1, ct);
                 if (!lease.IsAcquired)
                     return null; // Rate limit hit
-                var client = App.HttpClientFactory.CreateClient(nameof(EftApiTechProvider));
+                var client = Program.HttpClientFactory.CreateClient(nameof(EftApiTechProvider));
                 using var response = await client.GetAsync($"api/profile/{accountId}", ct);
-                if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+                string content = await response.Content.ReadAsStringAsync(ct);
+                if (!response.IsSuccessStatusCode) // Handle errors
                 {
-                    MessageBox.Show(MainWindow.Instance, $"eft-api.tech returned '{response.StatusCode}'. Please make sure your Api Key and IP Address are set correctly.", nameof(EftApiTechProvider), MessageBoxButton.OK, MessageBoxImage.Warning);
+                    if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden) // Auth failure
+                    {
+                        MessageBox.Show(RadarWindow.Handle, $"eft-api.tech returned '{response.StatusCode}'. Please make sure your Api Key and IP Address are set correctly.", nameof(EftApiTechProvider), MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
+                    else if (response.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.NotFound) // No profile exists
+                    {
+                        _skip.TryAdd(accountId, 0);
+                    }
+                    Logging.WriteLine($"[EftApiTechProvider] Failed to get Profile '{accountId}': [{response.StatusCode}] '{content}'");
+                    return null;
                 }
-                else if (response.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.NotFound)
-                {
-                    _skip.TryAdd(accountId, 0);
-                }
-                response.EnsureSuccessStatusCode();
-                string json = await response.Content.ReadAsStringAsync(ct);
-                using var jsonDoc = JsonDocument.Parse(json);
-                bool success = jsonDoc.RootElement.GetProperty("success").GetBoolean();
-                if (!success)
-                    throw new InvalidOperationException("Profile request was not successful.");
+                using var jsonDoc = JsonDocument.Parse(content);
                 var epoch = jsonDoc.RootElement.GetProperty("lastUpdated").GetProperty("epoch").GetInt64();
                 var data = jsonDoc.RootElement.GetProperty("data");
                 string raw = data.GetRawText();
-                var result = JsonSerializer.Deserialize<ProfileData>(raw, App.JsonOptions) ??
+                var result = JsonSerializer.Deserialize<ProfileApiTypes.ProfileData>(raw, Program.JsonOptions) ??
                     throw new InvalidOperationException("Failed to deserialize response");
-                Debug.WriteLine($"[EftApiTechProvider] Got Profile '{accountId}'!");
+                Logging.WriteLine($"[EftApiTechProvider] Got Profile '{accountId}'!");
                 return new()
                 {
                     Data = result,
@@ -140,7 +161,7 @@ namespace LoneEftDmaRadar.Web.EftApiTech
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[EftApiTechProvider] Failed to get profile: {ex}");
+                Logging.WriteLine($"[EftApiTechProvider] Unhandled Exception: {ex}");
                 return null;
             }
         }

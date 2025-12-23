@@ -1,15 +1,13 @@
 ﻿using LoneEftDmaRadar.Misc;
 using LoneEftDmaRadar.Tarkov.GameWorld.Player;
 using LoneEftDmaRadar.Tarkov.Unity;
-using LoneEftDmaRadar.UI.Radar.Maps;
+using LoneEftDmaRadar.UI.Maps;
 using LoneEftDmaRadar.UI.Skia;
 
 namespace LoneEftDmaRadar.Tarkov.GameWorld.Hazards
 {
     public class GenericWorldHazard : IWorldHazard
     {
-        [JsonIgnore]
-        private Vector3 _position;
         [JsonPropertyName("hazardType")]
         public string HazardType { get; set; }
 
@@ -24,9 +22,9 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Hazards
 
         public void Draw(SKCanvas canvas, EftMapParams mapParams, LocalPlayer localPlayer)
         {
-            var mineZoomedPos = this.Position.ToMapPos(mapParams.Map).ToZoomedPos(mapParams);
-            MouseoverPosition = mineZoomedPos.AsVector2();
-            mineZoomedPos.DrawHazardMarker(canvas);
+            var hazardZoomedPos = this.Position.ToMapPos(mapParams.Map).ToZoomedPos(mapParams);
+            MouseoverPosition = hazardZoomedPos.AsVector2();
+            hazardZoomedPos.DrawHazardMarker(canvas);
         }
 
         public void DrawMouseover(SKCanvas canvas, EftMapParams mapParams, LocalPlayer localPlayer)

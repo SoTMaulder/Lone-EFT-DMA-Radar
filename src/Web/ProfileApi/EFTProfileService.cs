@@ -31,7 +31,6 @@ using LoneEftDmaRadar.Misc;
 using LoneEftDmaRadar.Misc.Services;
 using LoneEftDmaRadar.Tarkov.GameWorld.Player.Helpers;
 using LoneEftDmaRadar.Web.EftApiTech;
-using LoneEftDmaRadar.Web.ProfileApi.Schema;
 using LoneEftDmaRadar.Web.TarkovDev.Profiles;
 using System.Threading.Tasks.Dataflow;
 
@@ -66,7 +65,7 @@ namespace LoneEftDmaRadar.Web.ProfileApi
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"[EFTProfileService] Unhandled Exception: {ex}");
+                        Logging.WriteLine($"[EFTProfileService] Unhandled Exception: {ex}");
                     }
                 },
                 new ExecutionDataflowBlockOptions

@@ -29,7 +29,7 @@ SOFTWARE.
 using Collections.Pooled;
 using LoneEftDmaRadar.Misc;
 using LoneEftDmaRadar.Tarkov.GameWorld.Player;
-using LoneEftDmaRadar.UI.Radar.Maps;
+using LoneEftDmaRadar.UI.Maps;
 using LoneEftDmaRadar.UI.Skia;
 using LoneEftDmaRadar.Web.TarkovDev.Data;
 
@@ -88,21 +88,24 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Loot
             }
             else // loot is level with player
             {
-                var size = 5 * App.Config.UI.UIScale;
+                var size = 5 * Program.Config.UI.UIScale;
                 canvas.DrawCircle(point, size, SKPaints.ShapeOutline);
                 canvas.DrawCircle(point, size, SKPaints.PaintCorpse);
             }
 
-            point.Offset(7 * App.Config.UI.UIScale, 3 * App.Config.UI.UIScale);
+            point.Offset(7 * Program.Config.UI.UIScale, 3 * Program.Config.UI.UIScale);
+            string important = (Player is ObservedPlayer observed && observed.Equipment.CarryingImportantLoot) ?
+                "!!" : null; // Flag important loot
+            string name = $"{important}{Name}";
 
             canvas.DrawText(
-                Name,
+                name,
                 point,
                 SKTextAlign.Left,
                 SKFonts.UIRegular,
                 SKPaints.TextOutline); // Draw outline
             canvas.DrawText(
-                Name,
+                name,
                 point,
                 SKTextAlign.Left,
                 SKFonts.UIRegular,
@@ -114,7 +117,7 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Loot
             using var lines = new PooledList<string>();
             if (Player is AbstractPlayer player)
             {
-                var name = App.Config.UI.HideNames && player.IsHuman ? "<Hidden>" : player.Name;
+                var name = Program.Config.UI.HideNames && player.IsHuman ? "<Hidden>" : player.Name;
                 lines.Add($"{player.Type.ToString()}:{name}");
                 string g = null;
                 if (player.GroupID != -1) g = $"G:{player.GroupID} ";
@@ -124,7 +127,9 @@ namespace LoneEftDmaRadar.Tarkov.GameWorld.Loot
                     lines.Add($"Value: {Utilities.FormatNumberKM(obs.Equipment.Value)}");
                     foreach (var item in obs.Equipment.Items.OrderBy(e => e.Key))
                     {
-                        lines.Add($"{item.Key.Substring(0, 5)}: {item.Value.ShortName}");
+                        string important = item.Value.IsImportant ?
+                            "!!" : null; // Flag important loot
+                        lines.Add($"{important}{item.Key.Substring(0, 5)}: {item.Value.ShortName}");
                     }
                 }
             }

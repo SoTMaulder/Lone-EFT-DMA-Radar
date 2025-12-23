@@ -27,7 +27,6 @@ SOFTWARE.
 */
 
 using Microsoft.Extensions.DependencyInjection;
-using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Authentication;
@@ -57,12 +56,13 @@ namespace LoneEftDmaRadar.Web.TarkovDev.Data
             .AddStandardResilienceHandler(options =>
             {
                 // Add retry logic for 403 responses -> sometimes tarkov.dev returns 403 for no reason but works immediately on retry
-                options.Retry.ShouldHandle += args =>
+                var origShouldHandle = options.Retry.ShouldHandle;
+                options.Retry.ShouldHandle = args =>
                 {
-                    if (args.Outcome.Result is HttpResponseMessage response)
-                        return ValueTask.FromResult(response.StatusCode == HttpStatusCode.Forbidden);
+                    if (args.Outcome.Result is HttpResponseMessage response && response.StatusCode == HttpStatusCode.Forbidden)
+                        return ValueTask.FromResult(true);
 
-                    return ValueTask.FromResult(false);
+                    return origShouldHandle(args);
                 };
                 options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(100);
                 options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(30);
@@ -70,7 +70,59 @@ namespace LoneEftDmaRadar.Web.TarkovDev.Data
             });
         }
 
-        public static async Task<string> GetTarkovDataAsync()
+        /// <summary>
+        /// Retrieves updated data from the Tarkov.Dev GraphQL API and returns the <see cref="TarkovDevTypes.DataElement"/>.
+        /// </summary>
+        public static async Task<TarkovDevTypes.DataElement> GetTarkovDataAsync()
+        {
+            using var response = await QueryTarkovDevAsync();
+            response.EnsureSuccessStatusCode();
+            var query = await JsonSerializer.DeserializeAsync<TarkovDevTypes.ApiResponse>(await response.Content.ReadAsStreamAsync(), Program.JsonOptions) ??
+                throw new InvalidOperationException("Failed to deserialize Tarkov.Dev Query Response.");
+            ProcessRawQuery(query);
+            return query.Data;
+        }
+
+        private static void ProcessRawQuery(TarkovDevTypes.ApiResponse query)
+        {
+#pragma warning disable CS0618 // Type or member is obsolete
+            var cleanedItems = new List<TarkovMarketItem>();
+            foreach (var item in query.Data.TarkovDevItems)
+            {
+                int slots = item.Width * item.Height;
+                cleanedItems.Add(new TarkovMarketItem
+                {
+                    BsgId = item.Id,
+                    ShortName = item.ShortName,
+                    Name = item.Name,
+                    Tags = item.Categories?.Select(x => x.Name)?.Distinct().ToHashSet() ?? new(), // Flatten categories
+                    TraderPrice = item.HighestVendorPrice,
+                    FleaPrice = item.OptimalFleaPrice,
+                    Slots = slots
+                });
+            }
+            foreach (var container in query.Data.TarkovDevContainers)
+            {
+                cleanedItems.Add(new TarkovMarketItem
+                {
+                    BsgId = container.Id,
+                    ShortName = container.Name,
+                    Name = container.NormalizedName,
+                    Tags = new HashSet<string>() { "Static Container" },
+                    TraderPrice = -1,
+                    FleaPrice = -1,
+                    Slots = 1
+                });
+            }
+            // Set result
+            query.Data.Items = cleanedItems;
+            // Null out processed query
+            query.Data.TarkovDevItems = null;
+            query.Data.TarkovDevContainers = null;
+#pragma warning restore CS0618 // Type or member is obsolete
+        }
+
+        private static async Task<HttpResponseMessage> QueryTarkovDevAsync()
         {
             var query = new Dictionary<string, string>
             {
@@ -83,206 +135,116 @@ namespace LoneEftDmaRadar.Web.TarkovDev.Data
                         extracts {
                             name
                             faction
-                            position {x,y,z}
+                            position { x, y, z }
                         }
                         transits {
                             description
-                            position {x,y,z}
+                            position { x, y, z }
                         }
                         hazards {
-                          hazardType
-                          position {
-                            x
-                            y
-                            z
-                          }
+                            hazardType
+                            position { x, y, z }
                         }
                     }
                     playerLevels {
                         exp
                         level
                     }
-                    items { 
-                        id 
-                        name 
-                        shortName 
-                        width 
-                        height 
-                        sellFor { 
-                            vendor { 
-                                name 
-                            } 
-                            priceRUB 
-                        } 
-                        basePrice 
-                        avg24hPrice 
-                        historicalPrices { 
-                            price 
-                        } 
-                        categories { 
-                            name 
-                        } 
+                    items {
+                        id
+                        name
+                        shortName
+                        width
+                        height
+                        sellFor {
+                            vendor { name }
+                            priceRUB
+                        }
+                        basePrice
+                        avg24hPrice
+                        historicalPrices { price }
+                        categories { name }
                     }
-                    lootContainers { 
-                        id 
-                        normalizedName 
-                        name 
+                    lootContainers {
+                        id
+                        normalizedName
+                        name
                     }
                     tasks {
-                      id
-                      name
-                      objectives {
                         id
-                        type
-                        description
-                        maps {
-                          nameId
-                          name
-                          normalizedName
-                        }
-                        ... on TaskObjectiveItem {
-                          item {
+                        name
+                        objectives {
                             id
-                            name
-                            shortName
-                          }
-                          zones {
-                            id
-                            map {
-                              nameId
-                              normalizedName
-                              name
-                            }
-                            position {
-                              y
-                              x
-                              z
-                            }
-                          }
-                          requiredKeys {
-                            id
-                            name
-                            shortName
-                          }
-                          count
-                          foundInRaid
-                        }
-                        ... on TaskObjectiveMark {
-                          id
-                          description
-                          markerItem {
-                            id
-                            name
-                            shortName
-                          }
-                          maps {
-                            nameId
-                            normalizedName
-                            name
-                          }
-                          zones {
-                            id
-                            map {
-                              nameId
-                              normalizedName
-                              name
-                            }
-                            position {
-                              y
-                              x
-                              z
-                            }
-                          }
-                          requiredKeys {
-                            id
-                            name
-                            shortName
-                          }
-                        }
-                        ... on TaskObjectiveQuestItem {
-                          id
-                          description
-                          requiredKeys {
-                            id
-                            name
-                            shortName
-                          }
-                          maps {
-                            nameId
-                            normalizedName
-                            name
-                          }
-                          zones {
-                            id
-                            map {
-                              id
-                              normalizedName
-                              name
-                            }
-                            position {
-                              y
-                              x
-                              z
-                            }
-                          }
-                          requiredKeys {
-                            id
-                            name
-                            shortName
-                          }
-                          questItem {
-                            id
-                            name
-                            shortName
-                            normalizedName
+                            type
                             description
-                          }
-                          count
-                        }
-                        ... on TaskObjectiveBasic {
-                          id
-                          description
-                          requiredKeys {
-                            id
-                            name
-                            shortName
-                          }
-                          maps {
-                            nameId
-                            normalizedName
-                            name
-                          }
-                          zones {
-                            id
-                            map {
-                              nameId
-                              normalizedName
-                              name
+                            maps {
+                                nameId
+                                name
+                                normalizedName
                             }
-                            position {
-                              y
-                              x
-                              z
+                            ... on TaskObjectiveItem {
+                                item { id, name, shortName }
+                                zones {
+                                    id
+                                    map { nameId, normalizedName, name }
+                                    position { x, y, z }
+                                }
+                                requiredKeys { id, name, shortName }
+                                count
+                                foundInRaid
                             }
-                          }
-                          requiredKeys {
-                            id
-                            name
-                            shortName
-                          }
+                            ... on TaskObjectiveMark {
+                                id
+                                description
+                                markerItem { id, name, shortName }
+                                maps { nameId, normalizedName, name }
+                                zones {
+                                    id
+                                    map { nameId, normalizedName, name }
+                                    position { x, y, z }
+                                }
+                                requiredKeys { id, name, shortName }
+                            }
+                            ... on TaskObjectiveQuestItem {
+                                id
+                                description
+                                maps { nameId, normalizedName, name }
+                                zones {
+                                    id
+                                    map { id, normalizedName, name }
+                                    position { x, y, z }
+                                }
+                                requiredKeys { id, name, shortName }
+                                questItem {
+                                    id
+                                    name
+                                    shortName
+                                    normalizedName
+                                    description
+                                }
+                                count
+                            }
+                            ... on TaskObjectiveBasic {
+                                id
+                                description
+                                maps { nameId, normalizedName, name }
+                                zones {
+                                    id
+                                    map { nameId, normalizedName, name }
+                                    position { x, y, z }
+                                }
+                                requiredKeys { id, name, shortName }
+                            }
                         }
-                      }
                     }
                 }
                 """
                 }
             };
-            var client = App.HttpClientFactory.CreateClient(nameof(TarkovDevGraphQLApi));
-            using var response = await client.PostAsJsonAsync(
+            var client = Program.HttpClientFactory.CreateClient(nameof(TarkovDevGraphQLApi));
+            return await client.PostAsJsonAsync(
                 requestUri: "https://api.tarkov.dev/graphql",
                 value: query);
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsStringAsync();
         }
     }
 }

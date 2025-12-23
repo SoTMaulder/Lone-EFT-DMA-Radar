@@ -26,93 +26,7 @@ SOFTWARE.
  *
 */
 
-
-/*
- * Lone EFT DMA Radar
- * Brought to you by Lone (Lone DMA)
- * 
-MIT License
-
-Copyright (c) 2025 Lone DMA
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
- *
-*/
-
-
-/*
- * Lone EFT DMA Radar
- * Brought to you by Lone (Lone DMA)
- * 
-MIT License
-
-Copyright (c) 2025 Lone DMA
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
- *
-*/
-
-
-/*
- * Lone EFT DMA Radar
- * Brought to you by Lone (Lone DMA)
- * 
-MIT License
-
-Copyright (c) 2025 Lone DMA
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
- *
-*/
-
+using LoneEftDmaRadar.Tarkov.GameWorld.Player;
 using LoneEftDmaRadar.UI.Loot;
 
 namespace LoneEftDmaRadar.Web.TarkovDev.Data
@@ -160,7 +74,7 @@ namespace LoneEftDmaRadar.Web.TarkovDev.Data
         public int Slots { get; init; } = 1;
         [JsonInclude]
         [JsonPropertyName("categories")]
-        public IReadOnlyList<string> Tags { get; init; } = new List<string>();
+        public HashSet<string> Tags { get; init; } = new HashSet<string>();
         /// <summary>
         /// True if this item is Important via the Filters.
         /// </summary>
@@ -196,6 +110,16 @@ namespace LoneEftDmaRadar.Web.TarkovDev.Data
         /// </summary>
         [JsonIgnore]
         public bool IsCurrency => Tags.Contains("Money");
+        /// <summary>
+        /// Is on the wishlist.
+        /// </summary>
+        [JsonIgnore]
+        public bool IsWishlisted => LocalPlayer.WishlistItems.ContainsKey(BsgId);
+        /// <summary>
+        /// Is a quest helper tracked item.
+        /// </summary>
+        [JsonIgnore]
+        public bool IsQuestHelperItem => Memory.QuestManager?.ItemConditions?.ContainsKey(BsgId) ?? false;
 
         /// <summary>
         /// This field is set if this item has a special filter.

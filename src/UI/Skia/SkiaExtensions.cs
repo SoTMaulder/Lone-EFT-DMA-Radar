@@ -26,14 +26,14 @@ SOFTWARE.
  *
 */
 
-using LoneEftDmaRadar.UI.Radar.Maps;
+using LoneEftDmaRadar.UI.Maps;
 
 namespace LoneEftDmaRadar.UI.Skia
 {
     internal static class SkiaExtensions
     {
         private static readonly SKPath _arrowBase = CreateArrowPath();
-        private static readonly SKPath _minePath = CreateMineMarkerPath();
+        private static readonly SKPath _hazardPath = CreateHazardMarkerPath();
 
         private static SKPath CreateArrowPath()
         {
@@ -46,7 +46,7 @@ namespace LoneEftDmaRadar.UI.Skia
             return path;
         }
 
-        private static SKPath CreateMineMarkerPath()
+        private static SKPath CreateHazardMarkerPath()
         {
             const float len = 3.5f; // base, unscaled length
             var path = new SKPath();
@@ -179,7 +179,7 @@ namespace LoneEftDmaRadar.UI.Skia
         /// </summary>
         public static SKPath GetUpArrow(this SKPoint point, float size = 6f, float offsetX = 0f, float offsetY = 0f)
         {
-            float scale = size * App.Config.UI.UIScale;
+            float scale = size * Program.Config.UI.UIScale;
             float tx = point.X + offsetX;
             float ty = point.Y + offsetY;
 
@@ -199,7 +199,7 @@ namespace LoneEftDmaRadar.UI.Skia
         /// </summary>
         public static SKPath GetDownArrow(this SKPoint point, float size = 6f, float offsetX = 0f, float offsetY = 0f)
         {
-            float scale = size * App.Config.UI.UIScale;
+            float scale = size * Program.Config.UI.UIScale;
             float tx = point.X + offsetX;
             float ty = point.Y + offsetY;
 
@@ -217,12 +217,12 @@ namespace LoneEftDmaRadar.UI.Skia
         /// </summary>
         public static void DrawHazardMarker(this SKPoint zoomedMapPos, SKCanvas canvas)
         {
-            float scale = App.Config.UI.UIScale;
+            float scale = Program.Config.UI.UIScale;
 
             canvas.Save();
             canvas.Translate(zoomedMapPos.X, zoomedMapPos.Y);
             canvas.Scale(scale, scale);
-            canvas.DrawPath(_minePath, SKPaints.PaintExplosives); // Uses explosives paint for hazard marker
+            canvas.DrawPath(_hazardPath, SKPaints.PaintExplosives); // Uses explosives paint for hazard marker
             canvas.Restore();
         }
 
