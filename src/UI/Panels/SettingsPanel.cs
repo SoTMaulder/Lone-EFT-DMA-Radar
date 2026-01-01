@@ -27,6 +27,7 @@ SOFTWARE.
 */
 
 using ImGuiNET;
+using LoneEftDmaRadar.Misc.JSON;
 using LoneEftDmaRadar.Tarkov;
 using LoneEftDmaRadar.UI.ColorPicker;
 using LoneEftDmaRadar.UI.Hotkeys;
@@ -44,6 +45,8 @@ namespace LoneEftDmaRadar.UI.Panels
 
         // Panel-local state for tracking window open/close
         private static bool _isOpen;
+
+        private static EftDmaConfig Config { get; } = Program.Config;
 
         /// <summary>
         /// Whether the settings panel is open.
@@ -66,7 +69,7 @@ namespace LoneEftDmaRadar.UI.Panels
                 .ToList();
 
             // Apply UI scale from config at startup
-            UpdateScaleValues(Program.Config.UI.UIScale);
+            UpdateScaleValues(Config.UI.UIScale);
         }
 
         /// <summary>
@@ -151,88 +154,80 @@ namespace LoneEftDmaRadar.UI.Panels
                 ImGui.SeparatorText("Display Settings");
 
                 // UI Scale
-                float uiScale = Program.Config.UI.UIScale;
+                float uiScale = Config.UI.UIScale;
                 if (ImGui.SliderFloat("UI Scale", ref uiScale, 0.5f, 2.0f, "%.1f"))
                 {
-                    Program.Config.UI.UIScale = uiScale;
+                    Config.UI.UIScale = uiScale;
                     UpdateScaleValues(uiScale);
                 }
                 if (ImGui.IsItemHovered())
                     ImGui.SetTooltip("Scale UI elements (text, icons, widgets)");
 
                 // Zoom
-                int zoom = Program.Config.UI.Zoom;
+                int zoom = Config.UI.Zoom;
                 if (ImGui.SliderInt("Zoom (F1/F2)", ref zoom, 1, 200))
                 {
-                    Program.Config.UI.Zoom = zoom;
+                    Config.UI.Zoom = zoom;
                 }
                 if (ImGui.IsItemHovered())
                     ImGui.SetTooltip("Map zoom level (lower = more zoomed in)");
 
                 // Aimline Length
-                int aimlineLength = Program.Config.UI.AimLineLength;
+                int aimlineLength = Config.UI.AimLineLength;
                 if (ImGui.SliderInt("Aimline Length", ref aimlineLength, 0, 1500))
                 {
-                    Program.Config.UI.AimLineLength = aimlineLength;
+                    Config.UI.AimLineLength = aimlineLength;
                 }
                 if (ImGui.IsItemHovered())
                     ImGui.SetTooltip("Length of player aim direction lines");
 
                 // Max Distance (snaps to nearest 25)
-                int maxDistanceRaw = (int)Program.Config.UI.MaxDistance;
+                int maxDistanceRaw = (int)Config.UI.MaxDistance;
                 int maxDistance = (int)(MathF.Round(maxDistanceRaw / 25f) * 25);
                 if (ImGui.SliderInt("Max Distance", ref maxDistance, 50, 1500, "%d"))
                 {
                     maxDistance = (int)(MathF.Round(maxDistance / 25f) * 25);
                     maxDistance = Math.Clamp(maxDistance, 50, 1500);
-                    Program.Config.UI.MaxDistance = maxDistance;
+                    Config.UI.MaxDistance = maxDistance;
                 }
                 if (ImGui.IsItemHovered())
                     ImGui.SetTooltip("Maximum distance to render targets in aimview");
 
                 ImGui.SeparatorText("Widgets");
 
-                bool aimviewWidget = Program.Config.AimviewWidget.Enabled;
+                bool aimviewWidget = Config.AimviewWidget.Enabled;
                 if (ImGui.Checkbox("Aimview Widget", ref aimviewWidget))
                 {
-                    Program.Config.AimviewWidget.Enabled = aimviewWidget;
+                    Config.AimviewWidget.Enabled = aimviewWidget;
                 }
                 if (ImGui.IsItemHovered())
                     ImGui.SetTooltip("3D view showing players in your field of view");
 
-                bool infoWidget = Program.Config.InfoWidget.Enabled;
+                bool infoWidget = Config.InfoWidget.Enabled;
                 if (ImGui.Checkbox("Player Info Widget", ref infoWidget))
                 {
-                    Program.Config.InfoWidget.Enabled = infoWidget;
+                    Config.InfoWidget.Enabled = infoWidget;
                 }
                 if (ImGui.IsItemHovered())
                     ImGui.SetTooltip("Displays a list of nearby players with details");
 
                 ImGui.SeparatorText("Visibility");
 
-                bool showExfils = Program.Config.UI.ShowExfils;
+                bool showExfils = Config.UI.ShowExfils;
                 if (ImGui.Checkbox("Show Exfils", ref showExfils))
                 {
-                    Program.Config.UI.ShowExfils = showExfils;
+                    Config.UI.ShowExfils = showExfils;
                 }
                 if (ImGui.IsItemHovered())
                     ImGui.SetTooltip("Show extraction points on the map");
 
-                bool showHazards = Program.Config.UI.ShowHazards;
+                bool showHazards = Config.UI.ShowHazards;
                 if (ImGui.Checkbox("Show Hazards", ref showHazards))
                 {
-                    Program.Config.UI.ShowHazards = showHazards;
+                    Config.UI.ShowHazards = showHazards;
                 }
                 if (ImGui.IsItemHovered())
                     ImGui.SetTooltip("Show mines, sniper zones, and other hazards");
-
-                bool connectGroups = Program.Config.UI.ConnectGroups;
-                if (ImGui.Checkbox("Connect Groups", ref connectGroups))
-                {
-                    Program.Config.UI.ConnectGroups = connectGroups;
-                }
-                if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip("Draw lines between grouped players");
 
                 ImGui.EndTabItem();
             }
@@ -244,37 +239,39 @@ namespace LoneEftDmaRadar.UI.Panels
             {
                 ImGui.SeparatorText("Player Display");
 
-                bool hideNames = Program.Config.UI.HideNames;
-                if (ImGui.Checkbox("Hide Names", ref hideNames))
-                {
-                    Program.Config.UI.HideNames = hideNames;
-                }
-                if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip("Hide player names on the radar");
-
-                bool teammateAimlines = Program.Config.UI.TeammateAimlines;
+                bool teammateAimlines = Config.UI.TeammateAimlines;
                 if (ImGui.Checkbox("Teammate Aimlines", ref teammateAimlines))
                 {
-                    Program.Config.UI.TeammateAimlines = teammateAimlines;
+                    Config.UI.TeammateAimlines = teammateAimlines;
                 }
                 if (ImGui.IsItemHovered())
                     ImGui.SetTooltip("Show aim direction lines for teammates");
 
-                bool aiAimlines = Program.Config.UI.AIAimlines;
+                bool aiAimlines = Config.UI.AIAimlines;
                 if (ImGui.Checkbox("AI Aimlines", ref aiAimlines))
                 {
-                    Program.Config.UI.AIAimlines = aiAimlines;
+                    Config.UI.AIAimlines = aiAimlines;
                 }
                 if (ImGui.IsItemHovered())
                     ImGui.SetTooltip("Show dynamic aim lines for AI players");
 
-                bool markSusPlayers = Program.Config.UI.MarkSusPlayers;
-                if (ImGui.Checkbox("Mark Suspicious Players", ref markSusPlayers))
+                bool connectGroups = Program.Config.UI.ConnectGroups;
+                if (ImGui.Checkbox("Connect Groups", ref connectGroups))
                 {
-                    Program.Config.UI.MarkSusPlayers = markSusPlayers;
+                    Program.Config.UI.ConnectGroups = connectGroups;
                 }
                 if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip("Highlight players with suspicious stats");
+                    ImGui.SetTooltip("Draw lines between grouped players");
+
+                ImGui.SeparatorText("Misc");
+
+                bool autoGroups = Config.Misc.AutoGroups;
+                if (ImGui.Checkbox("Auto Groups", ref autoGroups))
+                {
+                    Config.Misc.AutoGroups = autoGroups;
+                }
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip("Best-effort: automatically infer groups before raid start based on proximity");
 
                 ImGui.EndTabItem();
             }
@@ -286,10 +283,10 @@ namespace LoneEftDmaRadar.UI.Panels
             {
                 ImGui.SeparatorText("Loot Settings");
 
-                bool lootEnabled = Program.Config.Loot.Enabled;
+                bool lootEnabled = Config.Loot.Enabled;
                 if (ImGui.Checkbox("Show Loot (F3)", ref lootEnabled))
                 {
-                    Program.Config.Loot.Enabled = lootEnabled;
+                    Config.Loot.Enabled = lootEnabled;
                 }
                 if (ImGui.IsItemHovered())
                     ImGui.SetTooltip("Toggle loot display on the radar");
@@ -299,10 +296,10 @@ namespace LoneEftDmaRadar.UI.Panels
                     ImGui.BeginDisabled();
                 }
 
-                bool showWishlist = Program.Config.Loot.ShowWishlist;
+                bool showWishlist = Config.Loot.ShowWishlist;
                 if (ImGui.Checkbox("Show Wishlist Items", ref showWishlist))
                 {
-                    Program.Config.Loot.ShowWishlist = showWishlist;
+                    Config.Loot.ShowWishlist = showWishlist;
                 }
                 if (ImGui.IsItemHovered())
                     ImGui.SetTooltip("Highlight items from your Tarkov wishlist");
@@ -320,10 +317,10 @@ namespace LoneEftDmaRadar.UI.Panels
         {
             if (ImGui.BeginTabItem("Containers"))
             {
-                bool containersEnabled = Program.Config.Containers.Enabled;
+                bool containersEnabled = Config.Containers.Enabled;
                 if (ImGui.Checkbox("Show Containers", ref containersEnabled))
                 {
-                    Program.Config.Containers.Enabled = containersEnabled;
+                    Config.Containers.Enabled = containersEnabled;
                 }
                 if (ImGui.IsItemHovered())
                     ImGui.SetTooltip("Show lootable containers on the radar");
@@ -333,18 +330,18 @@ namespace LoneEftDmaRadar.UI.Panels
                     ImGui.BeginDisabled();
                 }
 
-                float drawDistance = Program.Config.Containers.DrawDistance;
+                float drawDistance = Config.Containers.DrawDistance;
                 if (ImGui.SliderFloat("Draw Distance", ref drawDistance, 10, 500))
                 {
-                    Program.Config.Containers.DrawDistance = drawDistance;
+                    Config.Containers.DrawDistance = drawDistance;
                 }
                 if (ImGui.IsItemHovered())
                     ImGui.SetTooltip("Maximum distance to show containers");
 
-                bool selectAll = Program.Config.Containers.SelectAll;
+                bool selectAll = Config.Containers.SelectAll;
                 if (ImGui.Checkbox("Select All", ref selectAll))
                 {
-                    Program.Config.Containers.SelectAll = selectAll;
+                    Config.Containers.SelectAll = selectAll;
                     if (_containerEntries is not null)
                     {
                         foreach (var entry in _containerEntries)
@@ -387,30 +384,30 @@ namespace LoneEftDmaRadar.UI.Panels
         {
             if (ImGui.BeginTabItem("Quest Helper"))
             {
-                bool questHelperEnabled = Program.Config.QuestHelper.Enabled;
+                bool questHelperEnabled = Config.QuestHelper.Enabled;
                 if (ImGui.Checkbox("Enable Quest Helper", ref questHelperEnabled))
                 {
-                    Program.Config.QuestHelper.Enabled = questHelperEnabled;
+                    Config.QuestHelper.Enabled = questHelperEnabled;
                 }
                 if (ImGui.IsItemHovered())
                     ImGui.SetTooltip("Show quest objectives and items on the radar");
 
                 ImGui.SeparatorText("Active Quests");
 
-                if (Memory.QuestManager?.Quests is IReadOnlyDictionary<string, Tarkov.GameWorld.Quests.QuestEntry> quests)
+                if (Memory.QuestManager?.Quests is IReadOnlyDictionary<string, Tarkov.World.Quests.QuestEntry> quests)
                 {
                     ImGui.BeginChild("QuestList", new Vector2(0, 200), ImGuiChildFlags.Borders);
                     foreach (var quest in quests.Values.OrderBy(x => x.Name))
                     {
                         ImGui.PushID(quest.Id);
-                        bool isBlacklisted = Program.Config.QuestHelper.BlacklistedQuests.ContainsKey(quest.Id);
+                        bool isBlacklisted = Config.QuestHelper.BlacklistedQuests.ContainsKey(quest.Id);
                         bool showQuest = !isBlacklisted;
                         if (ImGui.Checkbox(quest.Name ?? quest.Id, ref showQuest))
                         {
                             if (showQuest)
-                                Program.Config.QuestHelper.BlacklistedQuests.TryRemove(quest.Id, out _);
+                                Config.QuestHelper.BlacklistedQuests.TryRemove(quest.Id, out _);
                             else
-                                Program.Config.QuestHelper.BlacklistedQuests.TryAdd(quest.Id, 0);
+                                Config.QuestHelper.BlacklistedQuests.TryAdd(quest.Id, 0);
                         }
                         ImGui.PopID();
                     }
@@ -454,7 +451,7 @@ namespace LoneEftDmaRadar.UI.Panels
             try
             {
                 var backupFile = Path.Combine(Program.ConfigPath.FullName, $"{EftDmaConfig.Filename}.userbak");
-                File.WriteAllText(backupFile, JsonSerializer.Serialize(Program.Config, Program.JsonOptions));
+                File.WriteAllText(backupFile, JsonSerializer.Serialize(Program.Config, AppJsonContext.Default.EftDmaConfig));
                 MessageBox.Show(RadarWindow.Handle, $"Backed up to {backupFile}", "Backup Config", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
@@ -479,13 +476,9 @@ namespace LoneEftDmaRadar.UI.Panels
         {
             // Update Paints
             SKPaints.TextOutline.StrokeWidth = 2f * newScale;
-            SKPaints.PaintConnectorGroup.StrokeWidth = 2.25f * newScale;
-            SKPaints.PaintMouseoverGroup.StrokeWidth = 1.66f * newScale;
             SKPaints.PaintLocalPlayer.StrokeWidth = 1.66f * newScale;
             SKPaints.PaintTeammate.StrokeWidth = 1.66f * newScale;
             SKPaints.PaintPMC.StrokeWidth = 1.66f * newScale;
-            SKPaints.PaintWatchlist.StrokeWidth = 1.66f * newScale;
-            SKPaints.PaintStreamer.StrokeWidth = 1.66f * newScale;
             SKPaints.PaintScav.StrokeWidth = 1.66f * newScale;
             SKPaints.PaintRaider.StrokeWidth = 1.66f * newScale;
             SKPaints.PaintBoss.StrokeWidth = 1.66f * newScale;
@@ -506,6 +499,8 @@ namespace LoneEftDmaRadar.UI.Panels
             SKPaints.PaintQuestZone.StrokeWidth = 0.25f * newScale;
             SKPaints.PaintQuestItem.StrokeWidth = 0.25f * newScale;
             SKPaints.PaintWishlistItem.StrokeWidth = 0.25f * newScale;
+            SKPaints.PaintConnectorGroup.StrokeWidth = 2.25f * newScale;
+            SKPaints.PaintMouseoverGroup.StrokeWidth = 1.66f * newScale;
 
             // Fonts
             SKFonts.UIRegular.Size = 12f * newScale;

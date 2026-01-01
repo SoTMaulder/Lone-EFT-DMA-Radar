@@ -28,12 +28,12 @@ SOFTWARE.
 
 using Collections.Pooled;
 using ImGuiNET;
-using LoneEftDmaRadar.Tarkov.GameWorld.Exits;
-using LoneEftDmaRadar.Tarkov.GameWorld.Explosives;
-using LoneEftDmaRadar.Tarkov.GameWorld.Hazards;
-using LoneEftDmaRadar.Tarkov.GameWorld.Loot;
-using LoneEftDmaRadar.Tarkov.GameWorld.Player;
-using LoneEftDmaRadar.Tarkov.GameWorld.Quests;
+using LoneEftDmaRadar.Tarkov.World.Exits;
+using LoneEftDmaRadar.Tarkov.World.Explosives;
+using LoneEftDmaRadar.Tarkov.World.Hazards;
+using LoneEftDmaRadar.Tarkov.World.Loot;
+using LoneEftDmaRadar.Tarkov.World.Player;
+using LoneEftDmaRadar.Tarkov.World.Quests;
 using LoneEftDmaRadar.UI.ColorPicker;
 using LoneEftDmaRadar.UI.Hotkeys;
 using LoneEftDmaRadar.UI.Hotkeys.Internal;
@@ -45,7 +45,9 @@ using LoneEftDmaRadar.UI.Widgets;
 using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
+using Silk.NET.OpenGL.Extensions.ImGui;
 using Silk.NET.Windowing;
+using Silk.NET.Windowing.Glfw;
 
 namespace LoneEftDmaRadar.UI
 {
@@ -61,7 +63,6 @@ namespace LoneEftDmaRadar.UI
         private static SKSurface _skSurface = null!;
         private static GRContext _grContext = null!;
         private static GRBackendRenderTarget _skBackendRenderTarget = null!;
-        private static volatile bool _purgeSkResources = false;
         private static readonly PeriodicTimer _fpsTimer = new(TimeSpan.FromSeconds(1));
         private static int _fpsCounter = 0;
         private static int _statusOrder = 1;
@@ -76,8 +77,6 @@ namespace LoneEftDmaRadar.UI
         // UI State (moved from RadarUIState)
         private static int _fps;
         private static bool _isLootFiltersOpen;
-        private static bool _isWatchlistOpen;
-        private static bool _isHistoryOpen;
         private static bool _isWebRadarOpen;
         private static bool _isMapFreeEnabled;
         private static Vector2 _mapPanPosition;
@@ -86,6 +85,7 @@ namespace LoneEftDmaRadar.UI
 
         #region Static Properties
 
+        private static EftDmaConfig Config { get; } = Program.Config;
         public static IntPtr Handle => _window?.Native?.Win32?.Hwnd ?? IntPtr.Zero;
         private static bool Starting => Memory.Starting;
         private static bool Ready => Memory.Ready;
@@ -100,8 +100,7 @@ namespace LoneEftDmaRadar.UI
         private static IReadOnlyCollection<IExitPoint> Exits => Memory.Exits;
         private static QuestManager Quests => Memory.QuestManager;
         private static bool SearchFilterIsSet => !string.IsNullOrEmpty(LootFilter.SearchString);
-        private static bool LootCorpsesVisible => Program.Config.Loot.Enabled && !Program.Config.Loot.HideCorpses && !SearchFilterIsSet;
-
+        private static bool LootCorpsesVisible => Config.Loot.Enabled && !Config.Loot.HideCorpses && !SearchFilterIsSet;
         /// <summary>
         /// Currently 'Moused Over' Group.
         /// </summary>
@@ -133,17 +132,21 @@ namespace LoneEftDmaRadar.UI
         {
             var options = WindowOptions.Default;
             options.Size = new Vector2D<int>(
-                (int)Program.Config.UI.WindowSize.Width,
-                (int)Program.Config.UI.WindowSize.Height);
+                (int)Config.UI.WindowSize.Width,
+                (int)Config.UI.WindowSize.Height);
             options.Title = Program.Name;
-            options.VSync = true;
+            options.VSync = false;
+            options.FramesPerSecond = Config.UI.FPS;
+            options.PreferredStencilBufferBits = 8;
+            options.PreferredBitDepth = new Vector4D<int>(8, 8, 8, 8);
 
             // Restore maximized state from config (not fullscreen)
-            if (Program.Config.UI.WindowMaximized)
+            if (Config.UI.WindowMaximized)
             {
                 options.WindowState = WindowState.Maximized;
             }
 
+            GlfwWindowing.Use();
             _window = Window.Create(options);
 
             _window.Load += OnLoad;
@@ -177,7 +180,7 @@ namespace LoneEftDmaRadar.UI
                 _window.GLContext!.TryGetProcAddress(name, out var addr) ? addr : 0);
 
             _grContext = GRContext.CreateGl(glInterface);
-            _grContext.SetResourceCacheLimit(512 * 1024 * 1024); // 512 MB
+            _grContext.SetResourceCacheLimit(Config.UI.GrResourceCacheLimitMB * 1024 * 1024);
 
             CreateSkiaSurface();
 
@@ -186,11 +189,9 @@ namespace LoneEftDmaRadar.UI
 
             // Pass the existing input context to ImGuiController to share it
             _imgui = new ImGuiController(
-                _gl,
-                _window,
-                _window.Size.X,
-                _window.Size.Y,
-                _input  // Share the input context
+                gl: _gl,
+                view: _window,
+                input: _input  // Share the input context
             );
 
             // Set IniFilename AFTER context and controller are created, then load settings
@@ -232,7 +233,6 @@ namespace LoneEftDmaRadar.UI
             ColorPickerPanel.Initialize();
             SettingsPanel.Initialize();
             LootFiltersPanel.Initialize();
-            PlayerWatchlistPanel.Initialize();
 
             // Initialize widgets
             InitializeWidgets();
@@ -246,7 +246,27 @@ namespace LoneEftDmaRadar.UI
         private static void CreateSkiaSurface()
         {
             _skSurface?.Dispose();
+            _skSurface = null;
             _skBackendRenderTarget?.Dispose();
+            _skBackendRenderTarget = null;
+
+            var size = _window.FramebufferSize;
+            if (size.X <= 0 || size.Y <= 0 || _grContext is null)
+            {
+                _skSurface = null!;
+                _skBackendRenderTarget = null!;
+                return;
+            }
+
+            const GetPName SampleBuffersPName = (GetPName)0x80A8; // GL_SAMPLE_BUFFERS
+            const GetPName SamplesPName = (GetPName)0x80A9;       // GL_SAMPLES
+            const GetPName StencilBitsPName = (GetPName)0x0D57;   // GL_STENCIL_BITS
+
+            _gl.GetInteger(SampleBuffersPName, out int sampleBuffers);
+            _gl.GetInteger(SamplesPName, out int samples);
+            if (sampleBuffers == 0)
+                samples = 0;
+            _gl.GetInteger(StencilBitsPName, out int stencilBits);
 
             var fbInfo = new GRGlFramebufferInfo(
                 0, // default framebuffer
@@ -254,10 +274,10 @@ namespace LoneEftDmaRadar.UI
             );
 
             _skBackendRenderTarget = new GRBackendRenderTarget(
-                _window.Size.X,
-                _window.Size.Y,
-                0,
-                0,
+                size.X,
+                size.Y,
+                samples,
+                stencilBits,
                 fbInfo
             );
 
@@ -273,7 +293,6 @@ namespace LoneEftDmaRadar.UI
         {
             _gl.Viewport(size);
             CreateSkiaSurface();
-            _imgui.WindowResized(size.X, size.Y);
         }
 
         private static void OnStateChanged(WindowState state)
@@ -282,7 +301,7 @@ namespace LoneEftDmaRadar.UI
             // Note: Fullscreen (hidden border + maximized) is NOT persisted - only regular maximized
             if (_window.WindowBorder == WindowBorder.Resizable)
             {
-                Program.Config.UI.WindowMaximized = (state == WindowState.Maximized);
+                Config.UI.WindowMaximized = (state == WindowState.Maximized);
             }
         }
 
@@ -291,59 +310,47 @@ namespace LoneEftDmaRadar.UI
             // Save window state - only save size if not maximized/fullscreen
             if (_window.WindowState == WindowState.Normal)
             {
-                Program.Config.UI.WindowSize = new SKSize(_window.Size.X, _window.Size.Y);
+                Config.UI.WindowSize = new SKSize(_window.Size.X, _window.Size.Y);
             }
 
-            // Only save maximized if it's regular maximized (not fullscreen)
-            Program.Config.UI.WindowMaximized = (_window.WindowState == WindowState.Maximized &&
-                                                  _window.WindowBorder == WindowBorder.Resizable);
-
-            Program.Config.Save();
-
-            // Cleanup resources
-            AimviewWidget.Cleanup();
-
-            _imgui?.Dispose();
-            _skSurface?.Dispose();
-            _skBackendRenderTarget?.Dispose();
-            _grContext?.Dispose();
+            Config.UI.WindowMaximized = _window.WindowState == WindowState.Maximized;
+            // CurrentDomain_ProcessExit will execute after this point
         }
 
         #endregion
 
         #region Render Loop
 
+        private static readonly RateLimiter _purgeRL = new(TimeSpan.FromSeconds(1));
+
+        /// <summary>
+        /// Main Render Loop.
+        /// </summary>
+        /// <remarks>
+        /// WARNING: Be careful modifying this method. The order of operations is critical to prevent rendering/resource issues.
+        /// </remarks>
+        /// <param name="delta"></param>
         private static void OnRender(double delta)
         {
+            if (_grContext is null || _skSurface is null)
+                return;
             try
             {
+                // Frame Setup
                 Interlocked.Increment(ref _fpsCounter);
-                if (Interlocked.Exchange(ref _purgeSkResources, false) == true)
+                _grContext.ResetContext();
+                if (_purgeRL.TryEnter())
                 {
-                    _grContext.PurgeResources();
+                    _grContext.PurgeUnlockedResources(false);
                 }
 
-                // --- SCENE RENDER (Skia) ---
-                // Render Skia FIRST, before ImGui.NewFrame() is called
-                // This prevents Skia's GL flush from corrupting ImGui's texture state
-                var canvas = _skSurface.Canvas;
-                canvas.Clear(SKColors.Black);
-                DrawRadarScene(canvas);
-                canvas.Flush();
-                _grContext.Flush();
+                // Scene Render (Skia)
+                var fbSize = _window.FramebufferSize;
+                DrawRadarScene(ref fbSize);
+                AimviewWidget.Render();
 
-                // Render AimviewWidget to its FBO (during Skia phase, before ImGui)
-                AimviewWidget.RenderToFbo();
-
-                // Restore viewport to full window after FBO rendering
-                _gl.Viewport(0, 0, (uint)_window.Size.X, (uint)_window.Size.Y);
-                _gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
-
-                // --- UI RENDER (ImGui) ---
-                // Now start ImGui frame AFTER Skia has flushed
-                _imgui.Update((float)delta);
-                DrawImGuiUI();
-                _imgui.Render();
+                // UI Render (ImGui)
+                DrawImGuiUI(ref fbSize, delta);
             }
             catch (Exception ex)
             {
@@ -351,19 +358,36 @@ namespace LoneEftDmaRadar.UI
             }
         }
 
-        private static void DrawRadarScene(SKCanvas canvas)
+        private static void DrawRadarScene(ref Vector2D<int> fbSize)
         {
-            var isStarting = Starting;
-            var isReady = Ready;
-            var inRaid = InRaid;
+            _gl.Viewport(0, 0, (uint)fbSize.X, (uint)fbSize.Y);
+            _gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
 
-            if (inRaid && LocalPlayer is LocalPlayer localPlayer && EftMapManager.LoadMap(MapID) is IEftMap map)
+            // Explicitly clear the backbuffer to avoid blending against stale pixels.
+            _gl.ClearColor(0f, 0f, 0f, 1f); // BLACK
+            _gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.StencilBufferBit | ClearBufferMask.DepthBufferBit);
+
+            var canvas = _skSurface.Canvas;
+            try
             {
-                DrawInRaidRadar(canvas, localPlayer, map);
+                var isStarting = Starting;
+                var isReady = Ready;
+                var inRaid = InRaid;
+
+                if (inRaid && LocalPlayer is LocalPlayer localPlayer && EftMapManager.LoadMap(MapID) is IEftMap map)
+                {
+                    DrawInRaidRadar(canvas, localPlayer, map);
+                }
+                else
+                {
+                    EftMapManager.Cleanup();
+                    DrawStatusMessage(canvas, isStarting, isReady);
+                }
             }
-            else
+            finally
             {
-                DrawStatusMessage(canvas, isStarting, isReady);
+                canvas.Flush();
+                _grContext.Flush();
             }
         }
 
@@ -390,13 +414,13 @@ namespace LoneEftDmaRadar.UI
                     _mapPanPosition = localPlayerMapPos;
                 }
                 var panPos = _mapPanPosition;
-                mapParams = map.GetParameters(canvasSize, Program.Config.UI.Zoom, ref panPos);
+                mapParams = map.GetParameters(canvasSize, Config.UI.Zoom, ref panPos);
                 _mapPanPosition = panPos;
             }
             else
             {
                 _mapPanPosition = default;
-                mapParams = map.GetParameters(canvasSize, Program.Config.UI.Zoom, ref localPlayerMapPos);
+                mapParams = map.GetParameters(canvasSize, Config.UI.Zoom, ref localPlayerMapPos);
             }
 
             var mapCanvasBounds = new SKRect(0, 0, canvasSize.Width, canvasSize.Height);
@@ -405,7 +429,7 @@ namespace LoneEftDmaRadar.UI
             map.Draw(canvas, localPlayer.Position.Y, mapParams.Bounds, mapCanvasBounds);
 
             // Draw loot
-            if (Program.Config.Loot.Enabled)
+            if (Config.Loot.Enabled)
             {
                 if (FilteredLoot is IEnumerable<LootItem> loot)
                 {
@@ -415,11 +439,11 @@ namespace LoneEftDmaRadar.UI
                     }
                 }
 
-                if (Program.Config.Containers.Enabled && Containers is IEnumerable<StaticLootContainer> containers)
+                if (Config.Containers.Enabled && Containers is IEnumerable<StaticLootContainer> containers)
                 {
                     foreach (var container in containers)
                     {
-                        if (Program.Config.Containers.Selected.ContainsKey(container.ID ?? "NULL"))
+                        if (Config.Containers.Selected.ContainsKey(container.ID ?? "NULL"))
                         {
                             container.Draw(canvas, mapParams, localPlayer);
                         }
@@ -428,7 +452,7 @@ namespace LoneEftDmaRadar.UI
             }
 
             // Draw hazards
-            if (Program.Config.UI.ShowHazards && Hazards is IReadOnlyCollection<IWorldHazard> hazards)
+            if (Config.UI.ShowHazards && Hazards is IReadOnlyCollection<IWorldHazard> hazards)
             {
                 foreach (var hazard in hazards)
                 {
@@ -446,7 +470,7 @@ namespace LoneEftDmaRadar.UI
             }
 
             // Draw exits
-            if (Program.Config.UI.ShowExfils && Exits is IReadOnlyCollection<IExitPoint> exits)
+            if (Config.UI.ShowExfils && Exits is IReadOnlyCollection<IExitPoint> exits)
             {
                 foreach (var exit in exits)
                 {
@@ -455,7 +479,7 @@ namespace LoneEftDmaRadar.UI
             }
 
             // Draw quest locations
-            if (Program.Config.QuestHelper.Enabled && Quests?.LocationConditions?.Values is IEnumerable<QuestLocation> questLocations)
+            if (Config.QuestHelper.Enabled && Quests?.LocationConditions?.Values is IEnumerable<QuestLocation> questLocations)
             {
                 foreach (var loc in questLocations)
                 {
@@ -495,12 +519,12 @@ namespace LoneEftDmaRadar.UI
             {
                 foreach (var player in allPlayers)
                 {
-                    if (player.IsHumanHostileActive && player.GroupID != -1)
+                    if (player.IsHumanHostileActive && player.GroupId != AbstractPlayer.SoloGroupId)
                     {
-                        if (!groupedByGrp.TryGetValue(player.GroupID, out var list))
+                        if (!groupedByGrp.TryGetValue(player.GroupId, out var list))
                         {
                             list = new PooledList<SKPoint>(capacity: 5);
-                            groupedByGrp[player.GroupID] = list;
+                            groupedByGrp[player.GroupId] = list;
                         }
                         list.Add(player.Position.ToMapPos(map.Config).ToZoomedPos(mapParams));
                     }
@@ -523,6 +547,7 @@ namespace LoneEftDmaRadar.UI
                     list.Dispose();
             }
         }
+
 
         private static void DrawStatusMessage(SKCanvas canvas, bool isStarting, bool isReady)
         {
@@ -579,52 +604,54 @@ namespace LoneEftDmaRadar.UI
             }
         }
 
-        private static void DrawImGuiUI()
+        private static void DrawImGuiUI(ref Vector2D<int> fbSize, double delta)
         {
-            // Draw overlay controls
-            RadarOverlayPanel.DrawTopBar();
-            RadarOverlayPanel.DrawLootOverlay();
-            RadarOverlayPanel.DrawMapSetupHelper();
-
-            // Draw main menu bar
-            if (ImGui.BeginMainMenuBar())
+            _gl.Viewport(0, 0, (uint)fbSize.X, (uint)fbSize.Y);
+            _gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+            _imgui.Update((float)delta);
+            try
             {
-                if (ImGui.MenuItem("Settings", null, SettingsPanel.IsOpen))
+                // Draw overlay controls
+                RadarOverlayPanel.DrawTopBar();
+                RadarOverlayPanel.DrawLootOverlay();
+                RadarOverlayPanel.DrawMapSetupHelper();
+
+                // Draw main menu bar
+                if (ImGui.BeginMainMenuBar())
                 {
-                    SettingsPanel.IsOpen = !SettingsPanel.IsOpen;
+                    if (ImGui.MenuItem("Settings", null, SettingsPanel.IsOpen))
+                    {
+                        SettingsPanel.IsOpen = !SettingsPanel.IsOpen;
+                    }
+
+                    ImGui.Separator();
+
+                    if (ImGui.MenuItem("Web Radar", null, _isWebRadarOpen))
+                    {
+                        _isWebRadarOpen = !_isWebRadarOpen;
+                    }
+                    if (ImGui.MenuItem("Loot Filters", null, _isLootFiltersOpen))
+                    {
+                        _isLootFiltersOpen = !_isLootFiltersOpen;
+                    }
+
+                    // Display current map and FPS on the right
+                    string mapName = EftMapManager.Map?.Config?.Name ?? "No Map";
+                    string rightText = $"{mapName} | {_fps} FPS";
+                    float rightTextWidth = ImGui.CalcTextSize(rightText).X;
+                    ImGui.SetCursorPosX(ImGui.GetWindowWidth() - rightTextWidth - 10);
+                    ImGui.Text(rightText);
+
+                    ImGui.EndMainMenuBar();
                 }
 
-                ImGui.Separator();
-
-                if (ImGui.MenuItem("Web Radar", null, _isWebRadarOpen))
-                {
-                    _isWebRadarOpen = !_isWebRadarOpen;
-                }
-                if (ImGui.MenuItem("History", null, _isHistoryOpen))
-                {
-                    _isHistoryOpen = !_isHistoryOpen;
-                }
-                if (ImGui.MenuItem("Watchlist", null, _isWatchlistOpen))
-                {
-                    _isWatchlistOpen = !_isWatchlistOpen;
-                }
-                if (ImGui.MenuItem("Loot Filters", null, _isLootFiltersOpen))
-                {
-                    _isLootFiltersOpen = !_isLootFiltersOpen;
-                }
-
-                // Display current map and FPS on the right
-                string mapName = EftMapManager.Map?.Config?.Name ?? "No Map";
-                string rightText = $"{mapName} | {_fps} FPS";
-                float rightTextWidth = ImGui.CalcTextSize(rightText).X;
-                ImGui.SetCursorPosX(ImGui.GetWindowWidth() - rightTextWidth - 10);
-                ImGui.Text(rightText);
-
-                ImGui.EndMainMenuBar();
+                // Draw windows
+                DrawWindows();
             }
-
-            // Draw windows
-            DrawWindows();
+            finally
+            {
+                _imgui.Render();
+            }
         }
 
         private static void DrawWindows()
@@ -639,18 +666,6 @@ namespace LoneEftDmaRadar.UI
             if (_isLootFiltersOpen)
             {
                 DrawLootFiltersWindow();
-            }
-
-            // Watchlist Window
-            if (_isWatchlistOpen)
-            {
-                DrawWatchlistWindow();
-            }
-
-            // History Window
-            if (_isHistoryOpen)
-            {
-                DrawHistoryWindow();
             }
 
             // Web Radar Window
@@ -683,6 +698,7 @@ namespace LoneEftDmaRadar.UI
                 AimviewWidget.Draw();
             }
 
+
             // Player Info Widget
             if (PlayerInfoWidget.IsOpen && InRaid)
             {
@@ -693,7 +709,7 @@ namespace LoneEftDmaRadar.UI
         private static void DrawLootFiltersWindow()
         {
             bool isOpen = _isLootFiltersOpen;
-            ImGui.SetNextWindowSize(new Vector2(650, 550), ImGuiCond.FirstUseEver);
+            ImGui.SetNextWindowSize(new Vector2(900, 700), ImGuiCond.FirstUseEver);
             if (ImGui.Begin("Loot Filters", ref isOpen))
             {
                 LootFiltersPanel.Draw();
@@ -701,36 +717,18 @@ namespace LoneEftDmaRadar.UI
                 if (ImGui.Button("Apply & Close"))
                 {
                     LootFiltersPanel.RefreshLootFilter();
-                    isOpen = false;
+                    isOpen = false; // close the window this frame
                 }
             }
             ImGui.End();
+
+            // If the user closed the window via the X button, apply the filter once on close.
+            if (_isLootFiltersOpen && !isOpen)
+            {
+                LootFiltersPanel.RefreshLootFilter();
+            }
+
             _isLootFiltersOpen = isOpen;
-        }
-
-        private static void DrawWatchlistWindow()
-        {
-            bool isOpen = _isWatchlistOpen;
-            ImGui.SetNextWindowSize(new Vector2(600, 500), ImGuiCond.FirstUseEver);
-            if (ImGui.Begin("Player Watchlist", ref isOpen))
-            {
-                PlayerWatchlistPanel.Draw();
-            }
-            ImGui.End();
-            _isWatchlistOpen = isOpen;
-        }
-
-        private static void DrawHistoryWindow()
-        {
-            bool isOpen = _isHistoryOpen;
-            ImGui.SetNextWindowSize(new Vector2(900, 400), ImGuiCond.FirstUseEver);
-            ImGui.SetNextWindowSizeConstraints(new Vector2(800, 300), new Vector2(float.MaxValue, float.MaxValue));
-            if (ImGui.Begin("Player History", ref isOpen))
-            {
-                PlayerHistoryPanel.Draw();
-            }
-            ImGui.End();
-            _isHistoryOpen = isOpen;
         }
 
         private static void DrawWebRadarWindow()
@@ -767,21 +765,9 @@ namespace LoneEftDmaRadar.UI
 
                 if (isDoubleClick)
                 {
-                    if (InRaid && _mouseOverItem is ObservedPlayer observed && observed.IsStreaming)
+                    if (_mouseOverItem is ObservedPlayer obs) // Toggle Teammate Status on Double Click
                     {
-                        // Open Twitch stream in browser
-                        try
-                        {
-                            Process.Start(new ProcessStartInfo
-                            {
-                                FileName = observed.TwitchChannelURL,
-                                UseShellExecute = true
-                            });
-                        }
-                        catch (Exception ex)
-                        {
-                            Logging.WriteLine($"Failed to open Twitch URL: {ex.Message}");
-                        }
+                        obs.ToggleTeammate();
                     }
                 }
 
@@ -845,8 +831,8 @@ namespace LoneEftDmaRadar.UI
             if (!ImGui.GetIO().WantCaptureMouse)
             {
                 int delta = (int)(wheel.Y * 5);
-                int newZoom = Program.Config.UI.Zoom - delta;
-                Program.Config.UI.Zoom = Math.Clamp(newZoom, 1, 200);
+                int newZoom = Config.UI.Zoom - delta;
+                Config.UI.Zoom = Math.Clamp(newZoom, 1, 200);
             }
         }
 
@@ -888,7 +874,7 @@ namespace LoneEftDmaRadar.UI
             {
                 case AbstractPlayer player:
                     _mouseOverItem = player;
-                    MouseoverGroup = (player.IsHumanHostile && player.GroupID != -1) ? player.GroupID : null;
+                    MouseoverGroup = (player.IsHumanHostile && player.GroupId != AbstractPlayer.SoloGroupId) ? player.GroupId : null;
                     if (LootCorpsesVisible && player.LootObject is LootCorpse playerCorpse)
                     {
                         _mouseOverItem = playerCorpse;
@@ -898,7 +884,7 @@ namespace LoneEftDmaRadar.UI
                 case LootCorpse corpseObj:
                     _mouseOverItem = corpseObj;
                     var corpse = corpseObj.Player;
-                    MouseoverGroup = (corpse?.IsHumanHostile == true && corpse.GroupID != -1) ? corpse.GroupID : null;
+                    MouseoverGroup = (corpse?.IsHumanHostile == true && corpse.GroupId != AbstractPlayer.SoloGroupId) ? corpse.GroupId : null;
                     break;
 
                 case LootItem loot:
@@ -928,19 +914,19 @@ namespace LoneEftDmaRadar.UI
         private static IEnumerable<IMouseoverEntity> GetMouseoverItems()
         {
             var players = AllPlayers?
-                .Where(x => x is not LoneEftDmaRadar.Tarkov.GameWorld.Player.LocalPlayer && !x.HasExfild && (!LootCorpsesVisible || x.IsAlive)) ??
+                .Where(x => x is not LoneEftDmaRadar.Tarkov.World.Player.LocalPlayer && !x.HasExfild && (!LootCorpsesVisible || x.IsAlive)) ??
                 Enumerable.Empty<AbstractPlayer>();
 
-            var loot = Program.Config.Loot.Enabled ?
+            var loot = Config.Loot.Enabled ?
                 FilteredLoot ?? Enumerable.Empty<IMouseoverEntity>() : Enumerable.Empty<IMouseoverEntity>();
-            var containers = Program.Config.Loot.Enabled && Program.Config.Containers.Enabled ?
+            var containers = Config.Loot.Enabled && Config.Containers.Enabled ?
                 Containers ?? Enumerable.Empty<IMouseoverEntity>() : Enumerable.Empty<IMouseoverEntity>();
-            var exits = Program.Config.UI.ShowExfils ?
+            var exits = Config.UI.ShowExfils ?
                 Exits ?? Enumerable.Empty<IMouseoverEntity>() : Enumerable.Empty<IMouseoverEntity>();
-            var quests = Program.Config.QuestHelper.Enabled ?
+            var quests = Config.QuestHelper.Enabled ?
                 Quests?.LocationConditions?.Values?.OfType<IMouseoverEntity>() ?? Enumerable.Empty<IMouseoverEntity>()
                 : Enumerable.Empty<IMouseoverEntity>();
-            var hazards = Program.Config.UI.ShowHazards ?
+            var hazards = Config.UI.ShowHazards ?
                 Hazards ?? Enumerable.Empty<IMouseoverEntity>()
                 : Enumerable.Empty<IMouseoverEntity>();
 
@@ -981,7 +967,7 @@ namespace LoneEftDmaRadar.UI
                     ZoomOut(HK_ZOOMTICKAMT);
                     break;
                 case Key.F3:
-                    Program.Config.Loot.Enabled = !Program.Config.Loot.Enabled;
+                    Config.Loot.Enabled = !Config.Loot.Enabled;
                     break;
             }
         }
@@ -1026,7 +1012,14 @@ namespace LoneEftDmaRadar.UI
         private static void ToggleAimviewWidget_HotkeyStateChanged(bool isKeyDown)
         {
             if (isKeyDown)
-                Program.Config.AimviewWidget.Enabled = !Program.Config.AimviewWidget.Enabled;
+                Config.AimviewWidget.Enabled = !Config.AimviewWidget.Enabled;
+        }
+
+        [Hotkey("Toggle Player Info Widget")]
+        private static void ToggleInfo_HotkeyStateChanged(bool isKeyDown)
+        {
+            if (isKeyDown)
+                Config.InfoWidget.Enabled = !Config.InfoWidget.Enabled;
         }
 
         [Hotkey("Toggle Show Meds")]
@@ -1049,25 +1042,11 @@ namespace LoneEftDmaRadar.UI
             }
         }
 
-        [Hotkey("Toggle Game Info Tab")]
-        private static void ToggleInfo_HotkeyStateChanged(bool isKeyDown)
-        {
-            if (isKeyDown)
-                Program.Config.InfoWidget.Enabled = !Program.Config.InfoWidget.Enabled;
-        }
-
-        [Hotkey("Toggle Player Names")]
-        private static void ToggleNames_HotkeyStateChanged(bool isKeyDown)
-        {
-            if (isKeyDown)
-                Program.Config.UI.HideNames = !Program.Config.UI.HideNames;
-        }
-
         [Hotkey("Toggle Loot")]
         private static void ToggleLoot_HotkeyStateChanged(bool isKeyDown)
         {
             if (isKeyDown)
-                Program.Config.Loot.Enabled = !Program.Config.Loot.Enabled;
+                Config.Loot.Enabled = !Config.Loot.Enabled;
         }
 
         [Hotkey("Zoom Out", HotkeyType.OnIntervalElapsed, HK_ZOOMTICKDELAY)]
@@ -1089,7 +1068,7 @@ namespace LoneEftDmaRadar.UI
         /// </summary>
         public static void ZoomIn(int amt)
         {
-            Program.Config.UI.Zoom = Math.Max(1, Program.Config.UI.Zoom - amt);
+            Config.UI.Zoom = Math.Max(1, Config.UI.Zoom - amt);
         }
 
         /// <summary>
@@ -1097,20 +1076,12 @@ namespace LoneEftDmaRadar.UI
         /// </summary>
         public static void ZoomOut(int amt)
         {
-            Program.Config.UI.Zoom = Math.Min(200, Program.Config.UI.Zoom + amt);
-        }
-
-        /// <summary>
-        /// Purge SKResources to free up memory.
-        /// </summary>
-        public static void PurgeSKResources()
-        {
-            _purgeSkResources = true;
+            Config.UI.Zoom = Math.Min(200, Config.UI.Zoom + amt);
         }
 
         private static async Task RunFpsTimerAsync()
         {
-            while (await _fpsTimer.WaitForNextTickAsync())
+            while (await _fpsTimer.WaitForNextTickAsync()) // 1 Second Interval
             {
                 _statusOrder = (_statusOrder >= 3) ? 1 : _statusOrder + 1;
                 _fps = Interlocked.Exchange(ref _fpsCounter, 0);

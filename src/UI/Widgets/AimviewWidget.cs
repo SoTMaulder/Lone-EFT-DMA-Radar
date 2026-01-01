@@ -27,9 +27,9 @@ SOFTWARE.
 */
 
 using ImGuiNET;
-using LoneEftDmaRadar.Tarkov.GameWorld.Loot;
-using LoneEftDmaRadar.Tarkov.GameWorld.Player;
-using LoneEftDmaRadar.Tarkov.GameWorld.Player.Helpers;
+using LoneEftDmaRadar.Tarkov.World.Loot;
+using LoneEftDmaRadar.Tarkov.World.Player;
+using LoneEftDmaRadar.Tarkov.World.Player.Helpers;
 using LoneEftDmaRadar.UI.Skia;
 using Silk.NET.OpenGL;
 
@@ -61,7 +61,6 @@ namespace LoneEftDmaRadar.UI.Widgets
         private static int _currentHeight;
 
         // Flag to track if we need to render this frame
-        private static bool _needsRender;
         private static int _pendingWidth;
         private static int _pendingHeight;
 
@@ -93,12 +92,10 @@ namespace LoneEftDmaRadar.UI.Widgets
         /// <summary>
         /// Called from the Skia render phase (before ImGui) to render to the FBO.
         /// </summary>
-        public static void RenderToFbo()
+        public static void Render()
         {
-            if (!_needsRender || _surface is null || _fbo == 0)
+            if (_surface is null || _fbo == 0)
                 return;
-
-            _needsRender = false;
 
             int width = _pendingWidth;
             int height = _pendingHeight;
@@ -107,9 +104,12 @@ namespace LoneEftDmaRadar.UI.Widgets
             _gl.BindFramebuffer(FramebufferTarget.Framebuffer, _fbo);
             _gl.Viewport(0, 0, (uint)width, (uint)height);
 
+            // Explicitly clear the backbuffer to avoid blending against stale pixels.
+            _gl.ClearColor(0f, 0f, 0f, 0f); // TRANSPARENT
+            _gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.StencilBufferBit | ClearBufferMask.DepthBufferBit);
+
             // Draw to Skia surface
             var canvas = _surface.Canvas;
-            canvas.Clear(SKColors.Transparent);
 
             try
             {
@@ -137,13 +137,12 @@ namespace LoneEftDmaRadar.UI.Widgets
             {
                 Logging.WriteLine($"CRITICAL AIMVIEW PANEL RENDER ERROR: {ex}");
             }
-
-            // Flush Skia to the FBO
-            canvas.Flush();
-            _grContext.Flush();
-
-            // Unbind FBO - return to default framebuffer
-            _gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+            finally
+            {
+                // Flush Skia to the FBO
+                canvas.Flush();
+                _grContext.Flush();
+            }
         }
 
         /// <summary>
@@ -175,7 +174,6 @@ namespace LoneEftDmaRadar.UI.Widgets
             EnsureFbo(width, height);
 
             // Request render for next frame
-            _needsRender = true;
             _pendingWidth = width;
             _pendingHeight = height;
 
@@ -329,8 +327,6 @@ namespace LoneEftDmaRadar.UI.Widgets
                 PlayerType.AIRaider => SKPaints.PaintAimviewWidgetRaider,
                 PlayerType.AIBoss => SKPaints.PaintAimviewWidgetBoss,
                 PlayerType.PScav => SKPaints.PaintAimviewWidgetPScav,
-                PlayerType.SpecialPlayer => SKPaints.PaintAimviewWidgetWatchlist,
-                PlayerType.Streamer => SKPaints.PaintAimviewWidgetStreamer,
                 _ => SKPaints.PaintAimviewWidgetPMC
             };
         }
@@ -461,11 +457,6 @@ namespace LoneEftDmaRadar.UI.Widgets
                 _gl.DeleteRenderbuffer(_depthRbo);
                 _depthRbo = 0;
             }
-        }
-
-        public static void Cleanup()
-        {
-            DestroyFbo();
         }
 
         #endregion

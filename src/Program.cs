@@ -21,17 +21,15 @@ global using MessageBoxImage = LoneEftDmaRadar.UI.Misc.MessageBoxImage;
 global using MessageBoxOptions = LoneEftDmaRadar.UI.Misc.MessageBoxOptions;
 global using MessageBoxResult = LoneEftDmaRadar.UI.Misc.MessageBoxResult;
 global using RateLimiter = LoneEftDmaRadar.Misc.RateLimiter;
-using LoneEftDmaRadar.Misc.JSON;
-using LoneEftDmaRadar.Misc.Services;
 using LoneEftDmaRadar.Tarkov;
 using LoneEftDmaRadar.UI;
 using LoneEftDmaRadar.UI.Maps;
 using LoneEftDmaRadar.UI.Misc;
 using LoneEftDmaRadar.UI.Skia;
-using LoneEftDmaRadar.Web.EftApiTech;
-using LoneEftDmaRadar.Web.TarkovDev.Data;
-using LoneEftDmaRadar.Web.TarkovDev.Profiles;
+using LoneEftDmaRadar.Web.TarkovDev;
 using Microsoft.Extensions.DependencyInjection;
+using Silk.NET.Input.Glfw;
+using Silk.NET.Windowing.Glfw;
 using Velopack;
 using Velopack.Sources;
 
@@ -39,10 +37,14 @@ namespace LoneEftDmaRadar
 {
     internal partial class Program
     {
-        internal const string Name = "Lone EFT DMA Radar";
+        private const string BaseName = "Lone EFT DMA Radar";
         private const string MUTEX_ID = "0f908ff7-e614-6a93-60a3-cee36c9cea91";
         private static readonly Mutex _mutex;
 
+        /// <summary>
+        /// Application Name with Version.
+        /// </summary>
+        internal static string Name { get; } = $"{BaseName} v{GetSemVer2OrDefault()}";
         /// <summary>
         /// Path to the Configuration Folder in %AppData%
         /// </summary>
@@ -65,24 +67,14 @@ namespace LoneEftDmaRadar
         /// HttpClientFactory for creating HttpClients.
         /// </summary>
         public static IHttpClientFactory HttpClientFactory { get; }
-        /// <summary>
-        /// Default JSON Options for this App Domain.
-        /// </summary>
-        public static JsonSerializerOptions JsonOptions { get; } = new()
-        {
-            Converters = { Vector2JsonConverter.Instance, Vector3JsonConverter.Instance },
-            WriteIndented = true,
-            PropertyNameCaseInsensitive = true,
-            AllowTrailingCommas = true,
-            NumberHandling = JsonNumberHandling.AllowReadingFromString,
-            ReadCommentHandling = JsonCommentHandling.Skip
-        };
 
         static Program()
         {
+            GlfwWindowing.RegisterPlatform();
+            GlfwInput.RegisterPlatform();
+            VelopackApp.Build().Run();
             try
             {
-                VelopackApp.Build().Run();
                 IsInstalled = new UpdateManager(".").IsInstalled;
                 _mutex = new Mutex(true, MUTEX_ID, out bool singleton);
                 if (!singleton)
@@ -91,6 +83,8 @@ namespace LoneEftDmaRadar
                 ServiceProvider = BuildServiceProvider();
                 HttpClientFactory = ServiceProvider.GetRequiredService<IHttpClientFactory>();
                 SetHighPerformanceMode();
+                AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+                AppDomain.CurrentDomain.ProcessExit += CurrentDomain_ProcessExit;
             }
             catch (Exception ex)
             {
@@ -103,7 +97,7 @@ namespace LoneEftDmaRadar
             try
             {
                 // Show loading window during initialization
-                var loadingWindow = new LoadingWindow();
+                using var loadingWindow = new LoadingWindow();
                 loadingWindow.Show();
 
                 // Run initialization on a background thread while loading window pumps messages on main thread
@@ -154,20 +148,33 @@ namespace LoneEftDmaRadar
             {
                 SKPaints.PaintBitmap.ColorFilter = SKPaints.GetDarkModeColorFilter(0.7f);
                 SKPaints.PaintBitmapAlpha.ColorFilter = SKPaints.GetDarkModeColorFilter(0.7f);
-                RuntimeHelpers.RunClassConstructor(typeof(LocalCache).TypeHandle);
             });
 
             // Wait for all tasks
             await Task.WhenAll(tarkovDataManager, eftMapManager, memoryInterface, misc);
 
             loadingWindow.UpdateProgress(100, "Loading Completed!");
-
-            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
         }
 
+        private static void CurrentDomain_ProcessExit(object sender, EventArgs e) => OnShutdown();
         private static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
         {
+            if (e.ExceptionObject is Exception ex)
+            {
+                Logging.WriteLine($"*** UNHANDLED EXCEPTION (Terminating: {e.IsTerminating}): {ex}");
+            }
+            if (e.IsTerminating)
+            {
+                OnShutdown();
+            }
+        }
+
+        private static void OnShutdown()
+        {
+            Logging.WriteLine("Saving Config and Closing DMA Connection...");
             Config.Save();
+            Memory.Close();
+            Logging.WriteLine("Exiting...");
         }
 
         /// <summary>
@@ -179,8 +186,6 @@ namespace LoneEftDmaRadar
             var services = new ServiceCollection();
             services.AddHttpClient(); // Add default HttpClientFactory
             TarkovDevGraphQLApi.Configure(services);
-            TarkovDevProfileProvider.Configure(services);
-            EftApiTechProvider.Configure(services);
             return services.BuildServiceProvider();
         }
 
@@ -191,14 +196,15 @@ namespace LoneEftDmaRadar
         {
             /// Prepare Process for High Performance Mode
             Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.High;
-            SetThreadExecutionState(EXECUTION_STATE.ES_CONTINUOUS | EXECUTION_STATE.ES_SYSTEM_REQUIRED |
-                                           EXECUTION_STATE.ES_DISPLAY_REQUIRED);
-            var highPerformanceGuid = new Guid("8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c");
+            if (SetThreadExecutionState(EXECUTION_STATE.ES_CONTINUOUS | EXECUTION_STATE.ES_SYSTEM_REQUIRED | EXECUTION_STATE.ES_DISPLAY_REQUIRED) == 0)
+                Logging.WriteLine($"WARNING: Unable to set Thread Execution State. This may cause performance issues. ERROR {Marshal.GetLastWin32Error()}");
+            Guid highPerformanceGuid = new("8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c");
             if (PowerSetActiveScheme(IntPtr.Zero, ref highPerformanceGuid) != 0)
-                Logging.WriteLine("WARNING: Unable to set High Performance Power Plan");
-            const uint timerResolutionMs = 5;
-            if (TimeBeginPeriod(timerResolutionMs) != 0)
-                Logging.WriteLine($"WARNING: Unable to set timer resolution to {timerResolutionMs}ms. This may cause performance issues.");
+                Logging.WriteLine($"WARNING: Unable to set High Performance Power Plan. This may cause performance issues. ERROR {Marshal.GetLastWin32Error()}");
+            if (TimeBeginPeriod(5) != 0)
+                Logging.WriteLine($"WARNING: Unable to set timer resolution to 5ms. This may cause performance issues. ERROR {Marshal.GetLastWin32Error()}");
+            if (AvSetMmThreadCharacteristicsW("Games", out _) == 0)
+                Logging.WriteLine($"WARNING: Unable to set Multimedia thread characteristics to 'Games'. This may cause performance issues. ERROR {Marshal.GetLastWin32Error()}");
         }
 
         private static async Task CheckForUpdatesAsync()
@@ -241,7 +247,27 @@ namespace LoneEftDmaRadar
             }
         }
 
-        [LibraryImport("kernel32.dll")]
+        private static string GetSemVer2OrDefault()
+        {
+            try
+            {
+                string strV = Assembly.GetExecutingAssembly()
+                    .GetCustomAttribute<AssemblyFileVersionAttribute>()
+                    ?.Version;
+
+                if (string.IsNullOrWhiteSpace(strV))
+                    return "0.0.0";
+
+                var v = new Version(strV);
+                return $"{v.Major}.{v.Minor}.{v.Build}";
+            }
+            catch
+            {
+                return "0.0.0";
+            }
+        }
+
+        [LibraryImport("kernel32.dll", SetLastError = true)]
         private static partial EXECUTION_STATE SetThreadExecutionState(EXECUTION_STATE esFlags);
 
         [Flags]
@@ -255,10 +281,13 @@ namespace LoneEftDmaRadar
             // ES_USER_PRESENT = 0x00000004
         }
 
-        [LibraryImport("powrprof.dll")]
+        [LibraryImport("avrt.dll", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
+        private static partial IntPtr AvSetMmThreadCharacteristicsW(string taskName, out uint taskIndex);
+
+        [LibraryImport("powrprof.dll", SetLastError = true)]
         private static partial uint PowerSetActiveScheme(IntPtr userRootPowerKey, ref Guid schemeGuid);
 
-        [LibraryImport("winmm.dll", EntryPoint = "timeBeginPeriod")]
+        [LibraryImport("winmm.dll", EntryPoint = "timeBeginPeriod", SetLastError = true)]
         private static partial uint TimeBeginPeriod(uint uMilliseconds);
 
         #endregion

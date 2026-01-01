@@ -5,12 +5,12 @@ namespace SDK
         public readonly partial struct GameWorld
         {
             public const uint BtrController = 0x20; // object
-            public const uint LocationId = 0xC0; // string
-            public const uint LootList = 0x180; // object
-            public const uint RegisteredPlayers = 0x198; // object
-            public const uint MainPlayer = 0x1E8; // object
-            public const uint SynchronizableObjectLogicProcessor = 0x220; // object
-            public const uint Grenades = 0x260; // object
+            public const uint LocationId = 0xC8; // string
+            public const uint LootList = 0x190; // object
+            public const uint RegisteredPlayers = 0x1B0; // object
+            public const uint MainPlayer = 0x208; // object
+            public const uint SynchronizableObjectLogicProcessor = 0x240; // object
+            public const uint Grenades = 0x280; // object
         }
 
         public readonly partial struct SynchronizableObject
@@ -26,7 +26,7 @@ namespace SDK
         public readonly partial struct TripwireSynchronizableObject
         {
             public const uint _tripwireState = 0xE4; // object
-            public const uint ToPosition = 0x16C; // object
+            public const uint ToPosition = 0x158; // object
         }
 
         public readonly partial struct BtrController
@@ -54,21 +54,22 @@ namespace SDK
         {
             public const uint MovementContext = 0x60; // object
             public const uint _playerBody = 0x190; // object
-            public const uint Corpse = 0x678; // object
-            public const uint Location = 0x868; // string
-            public const uint Profile = 0x8E0; // object
-            public const uint _playerLookRaycastTransform = 0x9E8; // object
+            public const uint Corpse = 0x680; // object
+            public const uint Location = 0x870; // string
+            public const uint RaidId = 0x8D8; // int32_t
+            public const uint Profile = 0x900; // object
+            public const uint _handsController = 0x980; // object
+            public const uint _playerLookRaycastTransform = 0xA08; // object
         }
 
         public readonly partial struct ObservedPlayerView
         {
-            public const uint ObservedPlayerController = 0x20; // object
-            public const uint Voice = 0x38; // string
-            public const uint GroupID = 0x78; // string
-            public const uint Side = 0x8C; // object
-            public const uint IsAI = 0x98; // bool
-            public const uint AccountId = 0xB0; // string
-            public const uint PlayerBody = 0xC8; // object
+            public const uint ObservedPlayerController = 0x28; // object
+            public const uint Voice = 0x40; // string
+            public const uint Id = 0x7C; // int32_t
+            public const uint Side = 0x94; // object
+            public const uint IsAI = 0xA0; // bool
+            public const uint PlayerBody = 0xD8; // object
         }
 
         public readonly partial struct ObservedPlayerController
@@ -77,6 +78,12 @@ namespace SDK
             public const uint PlayerView = 0x18; // object
             public const uint MovementController = 0xD8; // object
             public const uint HealthController = 0xE8; // object
+            public const uint HandsController = 0x120; // object
+        }
+
+        public readonly partial struct ObservedPlayerHandsController
+        {
+            public const uint _item = 0x58; // object
         }
 
         public readonly partial struct InventoryController

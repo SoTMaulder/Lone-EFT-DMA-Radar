@@ -29,12 +29,12 @@ SOFTWARE.
 namespace LoneEftDmaRadar.Tarkov.Unity
 {
     /// <summary>
-    /// Defines an Entity that has a 3D GameWorld Position.
+    /// Defines an Entity that has a 3D World Position.
     /// </summary>
     public interface IWorldEntity
     {
         /// <summary>
-        /// Entity's Unity Position in Local Game World.
+        /// Entity's Unity Position in Game World.
         /// </summary>
         ref readonly Vector3 Position { get; }
     }

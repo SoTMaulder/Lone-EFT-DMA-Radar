@@ -28,14 +28,14 @@ SOFTWARE.
 
 global using LoneEftDmaRadar.DMA;
 using Collections.Pooled;
-using LoneEftDmaRadar.Misc;
-using LoneEftDmaRadar.Tarkov.GameWorld;
-using LoneEftDmaRadar.Tarkov.GameWorld.Exits;
-using LoneEftDmaRadar.Tarkov.GameWorld.Explosives;
-using LoneEftDmaRadar.Tarkov.GameWorld.Loot;
-using LoneEftDmaRadar.Tarkov.GameWorld.Player;
-using LoneEftDmaRadar.Tarkov.GameWorld.Quests;
 using LoneEftDmaRadar.Tarkov.Unity.Structures;
+using LoneEftDmaRadar.Tarkov.World;
+using LoneEftDmaRadar.Tarkov.World.Exits;
+using LoneEftDmaRadar.Tarkov.World.Explosives;
+using LoneEftDmaRadar.Tarkov.World.Loot;
+using LoneEftDmaRadar.Tarkov.World.Player;
+using LoneEftDmaRadar.Tarkov.World.Quests;
+using System.Runtime;
 using VmmSharpEx;
 using VmmSharpEx.Extensions;
 using VmmSharpEx.Options;
@@ -70,7 +70,7 @@ namespace LoneEftDmaRadar.DMA
         public static IReadOnlyCollection<IExitPoint> Exits => Game?.Exits;
         public static LocalPlayer LocalPlayer => Game?.LocalPlayer;
         public static LootManager Loot => Game?.Loot;
-        public static LocalGameWorld Game { get; private set; }
+        public static GameWorld Game { get; private set; }
         public static QuestManager QuestManager => Game?.QuestManager;
 
         internal static async Task ModuleInitAsync()
@@ -124,7 +124,6 @@ namespace LoneEftDmaRadar.DMA
                     {
                         EnableMemoryWriting = false
                     };
-                    AppDomain.CurrentDomain.ProcessExit += CurrentDomain_ProcessExit;
                     _vmm.RegisterAutoRefresh(RefreshOption.MemoryPartial, TimeSpan.FromMilliseconds(300));
                     _vmm.RegisterAutoRefresh(RefreshOption.TlbPartial, TimeSpan.FromSeconds(2));
                     try
@@ -141,6 +140,7 @@ namespace LoneEftDmaRadar.DMA
                             options: MessageBoxOptions.DefaultDesktopOnly);
                     }
                     ProcessStopped += MemDMA_ProcessStopped;
+                    RaidStarted += Memory_RaidStarted;
                     RaidStopped += MemDMA_RaidStopped;
                     // Start Memory Thread after successful startup
                     new Thread(MemoryPrimaryWorker)
@@ -156,19 +156,12 @@ namespace LoneEftDmaRadar.DMA
                     $"Reason: {ex.Message}\n" +
                     $"{versions}\n\n" +
                     "===TROUBLESHOOTING===\n" +
-                    "1. Reboot both your Game PC / Radar PC (This USUALLY fixes it).\n" +
-                    "2. Reseat all cables/connections and make sure they are secure.\n" +
-                    "3. Changed Hardware/Operating System on Game PC? Reset your DMA Config ('Options' menu in Client) and try again.\n" +
-                    "4. Make sure all Setup Steps are completed (See DMA Setup Guide/FAQ for additional troubleshooting).\n\n" +
-                    "PLEASE REVIEW THE ABOVE BEFORE CONTACTING SUPPORT!");
+                    "1. Cold boot (power off/power on) both your Game PC / Radar PC (This USUALLY fixes it).\n" +
+                    "2. Reseat all cables/connections and make sure they are secure. Try a different USB Port.\n" +
+                    "3. Changed Hardware/Operating System on Game PC? Delete %AppData%\\CFG\\mmap.txt and try again.\n" +
+                    "4. Make sure all Setup Steps are completed (See DMA Setup Guide/Wiki for additional troubleshooting).");
                 }
             });
-        }
-
-        private static void CurrentDomain_ProcessExit(object sender, EventArgs e)
-        {
-            _vmm.Dispose();
-            _vmm = null;
         }
 
         /// <summary>
@@ -234,7 +227,6 @@ namespace LoneEftDmaRadar.DMA
                 try
                 {
                     _vmm.ForceFullRefresh();
-                    ResourceJanitor.Run();
                     LoadProcess();
                     LoadModules();
                     Starting = true;
@@ -263,7 +255,7 @@ namespace LoneEftDmaRadar.DMA
                 try
                 {
                     var ct = _cts.Token;
-                    using (var game = Game = LocalGameWorld.CreateGameInstance(ct))
+                    using (var game = Game = GameWorld.CreateGameInstance(ct))
                     {
                         OnRaidStarted();
                         game.Start();
@@ -312,10 +304,15 @@ namespace LoneEftDmaRadar.DMA
             _pid = default;
         }
 
+        private static void Memory_RaidStarted(object sender, EventArgs e)
+        {
+            GCSettings.LatencyMode = GCLatencyMode.SustainedLowLatency;
+        }
 
         private static void MemDMA_RaidStopped(object sender, EventArgs e)
         {
             Game = null;
+            GCSettings.LatencyMode = GCLatencyMode.Interactive;
         }
 
         /// <summary>
@@ -327,6 +324,22 @@ namespace LoneEftDmaRadar.DMA
             if (!_vmm.PidGetFromName(GAME_PROCESS_NAME, out uint pid))
                 throw new InvalidOperationException($"Unable to find '{GAME_PROCESS_NAME}'");
             _pid = pid;
+            SetCache(pid);
+        }
+
+        /// <summary>
+        /// Check if the Cache is old and reset if needed.
+        /// </summary>
+        /// <param name="pid"></param>
+        private static void SetCache(uint pid)
+        {
+            if (Program.Config.Cache.PID != pid)
+            {
+                Program.Config.Cache = new PersistentCache()
+                {
+                    PID = pid
+                };
+            }
         }
 
         /// <summary>
@@ -625,6 +638,15 @@ namespace LoneEftDmaRadar.DMA
             }
 
             throw new ProcessNotRunningException();
+        }
+
+        /// <summary>
+        /// Close the FPGA DMA Connection.
+        /// </summary>
+        public static void Close()
+        {
+            _vmm?.Dispose();
+            _vmm = null;
         }
 
         private sealed class ProcessNotRunningException : Exception

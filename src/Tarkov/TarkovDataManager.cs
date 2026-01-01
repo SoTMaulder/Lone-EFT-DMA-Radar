@@ -26,7 +26,8 @@ SOFTWARE.
  *
 */
 
-using LoneEftDmaRadar.Web.TarkovDev.Data;
+using LoneEftDmaRadar.Misc.JSON;
+using LoneEftDmaRadar.Web.TarkovDev;
 using System.Collections.Frozen;
 
 namespace LoneEftDmaRadar.Tarkov
@@ -50,7 +51,6 @@ namespace LoneEftDmaRadar.Tarkov
         /// Master containers dictionary - mapped via BSGID String.
         /// </summary>
         public static FrozenDictionary<string, TarkovMarketItem> AllContainers { get; private set; }
-
         /// <summary>
         /// Maps Data for Tarkov.
         /// </summary>
@@ -63,11 +63,6 @@ namespace LoneEftDmaRadar.Tarkov
         /// All Task Zones mapped by MapID -> ZoneID -> Position.
         /// </summary>
         public static FrozenDictionary<string, FrozenDictionary<string, Vector3>> TaskZones { get; private set; }
-        /// <summary>
-        /// XP Table for Tarkov.
-        /// Key: Cumulative XP Required, Value: Player Level.
-        /// </summary>
-        public static IReadOnlyDictionary<int, int> XPTable { get; private set; }
 
         #region Startup
 
@@ -160,36 +155,9 @@ namespace LoneEftDmaRadar.Tarkov
                     StringComparer.OrdinalIgnoreCase
                 )
                 .ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-            XPTable = BuildXPTable(data.PlayerLevels);
             var maps = data.Maps.ToDictionary(x => x.NameId, StringComparer.OrdinalIgnoreCase) ??
                 new Dictionary<string, TarkovDevTypes.MapElement>(StringComparer.OrdinalIgnoreCase);
             MapData = maps.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        }
-
-        /// <summary>
-        /// Takes an input XP Table from Tarkov.Dev that is non-cumulative, and rebuilds the dictionary using cumulative XP Values for each level.
-        /// </summary>
-        private static Dictionary<int, int> BuildXPTable(List<TarkovDevTypes.PlayerLevelElement> list)
-        {
-            if (list is null || list.Count == 0)
-                return new();
-            var result = new Dictionary<int, int>(list.Count);
-            var ordered = list
-                .OrderBy(x => x.Level)
-                .ToList();
-
-            // First entry stays unchanged
-            result[ordered[0].Exp] = ordered[0].Level;
-            int runningSum = ordered[0].Exp;
-
-            // Remaining entries use cumulative keys
-            for (int i = 1; i < ordered.Count; i++)
-            {
-                runningSum += ordered[i].Exp;
-                result[runningSum] = ordered[i].Level;
-            }
-
-            return result;
         }
 
         /// <summary>
@@ -203,7 +171,7 @@ namespace LoneEftDmaRadar.Tarkov
             const string resource = "LoneEftDmaRadar.DEFAULT_DATA.json";
             using var dataStream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resource) ??
                 throw new ArgumentNullException(resource);
-            var data = await JsonSerializer.DeserializeAsync<TarkovDevTypes.DataElement>(dataStream)
+            var data = await JsonSerializer.DeserializeAsync(dataStream, AppJsonContext.Default.DataElement)
                 ?? throw new InvalidOperationException($"Failed to deserialize {nameof(dataStream)}");
             SetData(data);
         }
@@ -233,7 +201,7 @@ namespace LoneEftDmaRadar.Tarkov
                     if (!file.Exists)
                         return null;
                     using var dataStream = File.OpenRead(file.FullName);
-                    return await JsonSerializer.DeserializeAsync<TarkovDevTypes.DataElement>(dataStream, Program.JsonOptions) ??
+                    return await JsonSerializer.DeserializeAsync(dataStream, AppJsonContext.Default.DataElement) ??
                         throw new InvalidOperationException($"Failed to deserialize {nameof(dataStream)}");
                 }
                 catch
@@ -254,9 +222,7 @@ namespace LoneEftDmaRadar.Tarkov
             {
                 var data = await TarkovDevGraphQLApi.GetTarkovDataAsync();
                 ArgumentNullException.ThrowIfNull(data, nameof(data));
-                var jsonOptions = new JsonSerializerOptions(Program.JsonOptions);
-                jsonOptions.WriteIndented = false;
-                var dataJson = JsonSerializer.Serialize(data, jsonOptions);
+                var dataJson = JsonSerializer.Serialize(data, AppJsonContext.Default.DataElement);
                 await File.WriteAllTextAsync(_tempDataFile.FullName, dataJson);
                 if (_dataFile.Exists)
                 {
